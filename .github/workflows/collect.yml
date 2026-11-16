@@ -1,19 +1,25 @@
 name: 收集 YouBike 資料
 
+# 做法：每次執行會連續收集約 5.5 小時（每 10 分鐘一次），
+# 結束前自動啟動下一輪，像接力一樣不中斷。
+# 不依賴 GitHub 的排程（排程常常延遲或被跳過）。
 on:
+  workflow_dispatch:          # 第一次手動按 Run workflow 啟動接力
   schedule:
-    - cron: "*/10 * * * *"   # 每 10 分鐘（GitHub 忙的時候可能會晚幾分鐘）
-  workflow_dispatch:          # 允許手動按「Run workflow」測試
+    - cron: "17 */6 * * *"    # 備援：萬一接力斷掉，每 6 小時嘗試重新啟動
 
 permissions:
-  contents: write
+  contents: write             # 存資料
+  actions: write              # 啟動下一輪
 
-concurrency: collect
+concurrency:
+  group: collect
+  cancel-in-progress: false   # 同時只會有一輪在跑
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 350
     env:
       TZ: Asia/Taipei         # 用台灣時間記錄
     steps:
@@ -22,13 +28,23 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
-      - name: 抓資料
-        run: python collector.py --once --area 中壢區 --daily
-      - name: 存回 GitHub
+
+      - name: 每 10 分鐘抓一次（連續約 5.5 小時）
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add data
-          git commit -m "data $(date '+%m/%d %H:%M')" || exit 0
-          git pull --rebase
-          git push
+          end=$(( $(date +%s) + 19800 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            python collector.py --once --area 中壢區 --daily || echo "這次抓取失敗，10 分鐘後再試"
+            git add data
+            if git commit -q -m "data $(date '+%m/%d %H:%M')"; then
+              git pull -q --rebase && git push -q || echo "上傳失敗，下次一起上傳"
+            fi
+            sleep 600
+          done
+
+      - name: 接力：啟動下一輪
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run collect.yml --ref ${{ github.ref_name }}
