@@ -1,0 +1,19 @@
+name: 測試通知
+
+# 設定好 WEBHOOK_URL 後，手動按 Run workflow，會送一則「測試」通知到 Power Automate
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Taipei
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python notify.py --test
