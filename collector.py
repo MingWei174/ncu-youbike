@@ -21,7 +21,7 @@ from datetime import datetime
 
 import requests
 
-# ↓↓↓ 資料平台上的 API 網址 ↓↓↓
+# ↓↓↓ 把資料平台上複製的 API 網址貼在這裡 ↓↓↓
 API_URL = os.environ.get("YOUBIKE_API_URL", (
     "https://opendata.tycg.gov.tw/api/dataset/5ca2bfc7-9ace-4719-88ae-4034b9a5a55c"
     "/resource/08274d61-edbe-419d-8fcc-7a643831283d/download"

@@ -24,17 +24,24 @@ MODEL = os.path.join(HERE, "model.txt")
 META = os.path.join(HERE, "model_meta.json")
 STEP = "10min"          # 重新取樣的時間格
 SHORTAGE = 2            # 可借車 ≤ 2 視為「缺車」
+NOTIFY_GAP_MIN = 60     # 同一站多久內不重複通知（分鐘）
+# GitHub 上用 alert_log.json（會存回 GitHub）；本機用另一個檔，避免同步時衝突
+ALERT_LOG = os.path.join(HERE, "alert_log.json" if os.environ.get("GITHUB_ACTIONS") else "alert_log_local.json")
 
 # 上課開始時間：請改成中大實際的節次時間
 CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
+
 
 FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
             "mins_to_class", "tot", "sbi", "fill_ratio",
             "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3"]
 
 
-def load():
+def load(recent=None):
+    """recent=N：只讀最近 N 個每日檔（預測時用，比較快）"""
     files = sorted(glob.glob(DATA))
+    if recent:
+        files = files[-recent:]
     if not files:
         raise SystemExit("data 資料夾裡沒有 snapshots*.csv")
     df = pd.concat([pd.read_csv(f, encoding="utf-8-sig", dtype={"sno": str}) for f in files])
@@ -112,13 +119,14 @@ def train(horizon):
     print(f"\n模型已存：{MODEL}")
 
 
-def predict():
+def predict(write_excel=True, recent=None):
     meta = json.load(open(META, encoding="utf-8"))
     with open(MODEL, encoding="utf-8") as f:
         booster = lgb.Booster(model_str=f.read())
-    g = add_features(load(), meta["horizon"] // 10)
+    g = add_features(load(recent), meta["horizon"] // 10)
     g["station"] = pd.Categorical(g["sno"], categories=meta["categories"])
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
+    last = last[last["t"] == last["t"].max()]       # 只預測最新一批還有資料的站
     p = np.clip(booster.predict(last[FEATURES]), 0, last["tot"]).round().astype(int)
     out = pd.DataFrame({
         "站點代號": last["sno"].values,
@@ -128,6 +136,26 @@ def predict():
         f"{meta['horizon']}分鐘後預測可借": p,
         "缺車預警": np.where(p <= SHORTAGE, "是", "否"),
     })
+    # 同一站 NOTIFY_GAP_MIN 分鐘內只通知一次
+    from datetime import datetime
+    now = datetime.now()
+    log = json.load(open(ALERT_LOG, encoding="utf-8")) if os.path.exists(ALERT_LOG) else {}
+    notify = []
+    for sno, alert in zip(out["站點代號"], out["缺車預警"]):
+        last = log.get(str(sno))
+        recent = last and (now - datetime.fromisoformat(last)).total_seconds() < NOTIFY_GAP_MIN * 60
+        if alert == "是" and not recent:
+            notify.append("是")
+            log[str(sno)] = now.isoformat(timespec="seconds")
+        else:
+            notify.append("否")
+    out["要通知"] = notify
+    with open(ALERT_LOG, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=1)
+
+    if not write_excel:
+        return out
+
     path = os.path.join(HERE, "predictions.xlsx")
     with pd.ExcelWriter(path, engine="openpyxl") as w:
         out.to_excel(w, sheet_name="預測", index=False)
@@ -136,6 +164,7 @@ def predict():
         ws.add_table(Table(displayName="Pred", ref=ws.dimensions))  # Power Automate 讀 Excel 需要「表格」
     print(out.to_string(index=False))
     print(f"\n已輸出 {path}")
+    return out
 
 
 if __name__ == "__main__":

@@ -1,0 +1,104 @@
+"""
+自動預測 + 缺車通知（給 GitHub Actions 每 10 分鐘執行，也可以在本機測試）
+
+流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數 → 有站「要通知」就呼叫 Power Automate 的 webhook
+
+用法：
+  python notify.py            # 正常執行
+  python notify.py --test     # 不管有沒有缺車，送一則「測試」通知（設定時用）
+  python notify.py --dry-run  # 只印出會送什麼，不真的送出
+
+Webhook 網址從環境變數 WEBHOOK_URL 讀取（GitHub 上存在 Secrets，不寫在程式裡）。
+"""
+import argparse
+import html
+import json
+import os
+import sys
+from datetime import datetime
+
+import requests
+
+import train
+
+# 只想通知哪些站（站名關鍵字，逗號分隔）；空字串 = 全部有收集的站
+WATCH = os.environ.get("WATCH_KEYWORDS", "中央大學")
+# 安靜時段：這段時間外不發通知
+NOTIFY_FROM, NOTIFY_TO = "06:30", "22:00"
+# 最新資料超過幾分鐘就不通知（避免收集中斷時用舊資料發通知）
+MAX_AGE_MIN = 30
+
+
+def horizon():
+    return json.load(open(train.META, encoding="utf-8"))["horizon"] if os.path.exists(train.META) else 30
+
+
+def build_payload(rows, test=False):
+    title = ("【測試】" if test else "⚠️ ") + "YouBike 缺車預警：" + "、".join(str(r["站名"]) for r in rows)
+    h = horizon()
+    pred_col = f"{h}分鐘後預測可借"
+    trs = "".join(
+        f"<tr><td>{html.escape(str(r['站名']))}</td><td>{r['現在可借']}</td>"
+        f"<td><b>{r[pred_col]}</b></td><td>{html.escape(str(r['資料時間']))}</td></tr>"
+        for r in rows)
+    body = (
+        f"<p>以下站點預測 <b>{h} 分鐘後</b>可借車數 ≤ {train.SHORTAGE} 台，建議提早出門或改去附近的站。</p>"
+        f"<table border='1' cellpadding='6' style='border-collapse:collapse'>"
+        f"<tr><th>站名</th><th>現在可借</th><th>{h} 分鐘後預測</th><th>資料時間</th></tr>{trs}</table>"
+        f"<p style='color:#666'>由機器學習模型自動預測，可能有誤差，請以現場為準。</p>"
+    )
+    if test:
+        body = "<p><b>這是設定用的測試通知，數字不代表真實狀況。</b></p>" + body
+    return {"title": title, "html": body, "count": len(rows),
+            "stations": [str(r["站名"]) for r in rows]}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--test", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    a = ap.parse_args()
+
+    url = os.environ.get("WEBHOOK_URL", "").strip()
+    now = datetime.now().strftime("%H:%M")
+
+    if a.test:
+        rows = [{"站名": "（測試）中央大學依仁堂", "現在可借": 5, f"{horizon()}分鐘後預測可借": 1,
+                 "資料時間": datetime.now().strftime("%Y-%m-%d %H:%M")}]
+    else:
+        if not (os.path.exists(train.MODEL) and os.path.exists(train.META)):
+            print("還沒有 model.txt / model_meta.json，先在電腦上訓練後上傳到 GitHub。略過預測。")
+            return
+        if not (NOTIFY_FROM <= now <= NOTIFY_TO):
+            print(f"現在 {now} 是安靜時段，不預測也不通知。")
+            return
+        out = train.predict(write_excel=False, recent=2)
+        newest = datetime.strptime(out["資料時間"].max(), "%Y-%m-%d %H:%M")
+        age = (datetime.now() - newest).total_seconds() / 60
+        if age > MAX_AGE_MIN:
+            print(f"最新資料是 {age:.0f} 分鐘前，太舊了，不通知。")
+            return
+        kws = [k for k in WATCH.split(",") if k]
+        if kws:
+            out = out[out["站名"].astype(str).apply(lambda s: any(k in s for k in kws))]
+        print(out.to_string(index=False))
+        rows = out[out["要通知"] == "是"].to_dict("records")
+        if not rows:
+            print("沒有需要通知的站。")
+            return
+
+    payload = build_payload(rows, test=a.test)
+    print("要送出的通知：", payload["title"])
+    if a.dry_run:
+        print(payload["html"])
+        return
+    if not url:
+        print("沒有設定 WEBHOOK_URL，無法送出。", file=sys.stderr)
+        sys.exit(1)
+    r = requests.post(url, json=payload, timeout=30)
+    print("webhook 回應：", r.status_code)
+    r.raise_for_status()
+
+
+if __name__ == "__main__":
+    main()
