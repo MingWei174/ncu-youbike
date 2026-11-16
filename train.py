@@ -26,7 +26,7 @@ STEP = "10min"          # 重新取樣的時間格
 SHORTAGE = 2            # 可借車 ≤ 2 視為「缺車」
 
 # 上課開始時間：請改成中大實際的節次時間
-CLASS_STARTS = ["08:00", "09:00", "10:10", "11:10", "13:00", "14:00", "15:10", "16:10"]
+CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
 
 FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
             "mins_to_class", "tot", "sbi", "fill_ratio",
@@ -104,7 +104,9 @@ def train(horizon):
     imp = pd.Series(m.feature_importances_, FEATURES).sort_values(ascending=False)
     print("\n最重要的特徵：", ", ".join(imp.index[:5]))
 
-    m.booster_.save_model(MODEL)
+    # 用 Python 寫檔，避免 LightGBM 在 Windows 讀不懂中文路徑
+    with open(MODEL, "w", encoding="utf-8") as f:
+        f.write(m.booster_.model_to_string())
     json.dump({"horizon": horizon, "categories": list(g["station"].cat.categories)},
               open(META, "w", encoding="utf-8"), ensure_ascii=False)
     print(f"\n模型已存：{MODEL}")
@@ -112,7 +114,8 @@ def train(horizon):
 
 def predict():
     meta = json.load(open(META, encoding="utf-8"))
-    booster = lgb.Booster(model_file=MODEL)
+    with open(MODEL, encoding="utf-8") as f:
+        booster = lgb.Booster(model_str=f.read())
     g = add_features(load(), meta["horizon"] // 10)
     g["station"] = pd.Categorical(g["sno"], categories=meta["categories"])
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
