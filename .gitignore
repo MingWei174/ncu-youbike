@@ -1,0 +1,10 @@
+# 不上傳到 GitHub 的東西
+.venv/
+venv/
+__pycache__/
+predictions.xlsx
+shortage_ratio.xlsx
+plot_*.png
+alert_log_local.json
+*.JSON
+~$*
