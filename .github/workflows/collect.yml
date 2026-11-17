@@ -1,7 +1,7 @@
 name: 收集 YouBike 資料
 
 # 每次執行會連續工作約 5.5 小時，每 10 分鐘：
-#   收資料 → （需要時）自動重訓模型 → 預測並更新 predictions.xlsx → 有缺車就通知
+#   收資料與雨量 → （需要時）自動重訓模型 → 預測並更新 predictions.xlsx → 有缺車就通知
 # 結束前自動啟動下一輪，像接力一樣不中斷（不依賴 GitHub 排程，排程常延遲或被跳過）。
 on:
   workflow_dispatch:          # 第一次手動按 Run workflow 啟動接力
@@ -23,6 +23,7 @@ jobs:
     env:
       TZ: Asia/Taipei                              # 用台灣時間記錄
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}      # Power Automate 網址（存在 Secrets）
+      CWA_API_KEY: ${{ secrets.CWA_API_KEY }}      # 中央氣象署授權碼（存在 Secrets）
       WATCH_KEYWORDS: 中央大學                     # 只通知站名含這些字的站，逗號分隔
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +40,7 @@ jobs:
           while [ "$(date +%s)" -lt "$end" ]; do
             git pull -q --rebase || echo "拉取更新失敗，下次再試"
             python collector.py --once --area 中壢區 --daily || echo "這次抓取失敗，10 分鐘後再試"
+            python weather.py --once || echo "天氣資料抓取失敗，10 分鐘後再試"
             python train.py --auto || echo "自動訓練失敗，下次再試"
             python notify.py || echo "這次預測或通知失敗，10 分鐘後再試"
             git add -A

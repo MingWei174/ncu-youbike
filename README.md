@@ -25,7 +25,9 @@ Microsoft × NCU AI 創新應用主題挑戰賽（AI for Better Campus & Life）
 ```mermaid
 flowchart LR
     A[桃園市 YouBike 2.0<br/>即時開放資料] -->|每 10 分鐘| B[collector.py<br/>收資料]
+    W[中央氣象署<br/>自動雨量站] -->|每 10 分鐘| X[weather.py<br/>收雨量]
     B --> C[(data/<br/>每日 CSV)]
+    X --> C
     C --> D[train.py --auto<br/>LightGBM 自動訓練]
     D --> E[(model.txt)]
     C --> F[notify.py<br/>預測 30 分鐘後車數]
@@ -41,25 +43,35 @@ flowchart LR
 | 環節 | 檔案 | 執行方式 |
 |---|---|---|
 | 收資料 | `collector.py` | GitHub 自動，每 10 分鐘 |
+| 收雨量 | `weather.py` | GitHub 自動，每 10 分鐘（自動挑離中大最近、有數值的雨量站） |
 | 訓練正式模型 | `train.py --auto` | GitHub 自動：資料滿 7 天後開始，約每週一次；改了正式設定也會重訓 |
 | 預測與通知 | `notify.py` | GitHub 自動，每 10 分鐘 |
 | 缺車通知 | Power Automate（收到 Teams webhook 要求時 → 傳送電子郵件） | 自動 |
 | 對話小幫手 | Copilot Studio，讀取 `predictions.xlsx` | Demo 前手動更新資料 |
-| 本機實驗 | `train.py --horizon … --shortage …` | 手動，結果存成 `model_local.txt`，不上傳 |
+| 本機實驗 | `experiments.py`（一次跑完 v1–v5）或 `train.py --horizon … --shortage …` | 手動；結果寫進 `experiments.md`，不會動到正式模型 |
 | 簡報素材 | `analyze.py`、`nearby.py` | 手動 |
 
 ## 模型
 
 - **預測目標**：各站 30 分鐘後的可借車數；可借車數 ≤ 2 台視為「缺車」。
 - **模型**：LightGBM 迴歸。
-- **特徵**：站點、時段、星期、是否週末、**距離下一節課開始的分鐘數**（中大上課節次）、目前車數與總車柱、過去 10 / 20 / 30 / 60 分鐘的車數與變化。
+- **特徵**：站點、時段、星期、是否週末、**距離下一節課開始的分鐘數**（中大上課節次 08:00–19:00 每整點）、目前車數與總車柱、過去 10 / 20 / 30 / 60 分鐘的車數與變化、**近 10 分鐘與近 1 小時雨量**。
+- **雨量缺值**：雨量資料從 2026/11/17 才開始收集，之前的時段沒有雨量；LightGBM 可直接處理缺值，實驗 v5（不用雨量）用來比較雨量特徵有沒有幫助。
 - **基準（baseline）**：假設 30 分鐘後車數不變，也就是只看當下的即時車數。
 - **評估**：依時間切分，前 80% 訓練、後 20% 測試，避免模型偷看到未來。指標為 MAE，以及缺車預警的 precision、recall。
 - **保護機制**：新模型的缺車 recall 要高於基準、MAE 不能比基準差，才會取代正式模型。
 
 ### 結果
 
-> 待 11/23 後以真實資料訓練並完成實驗後更新（實驗紀錄見 `experiments.md`）。
+> 待 11/23 後以真實資料訓練並完成實驗後更新。完整實驗紀錄見 `experiments.md`（由 `python experiments.py` 自動產生）。
+
+| 實驗 | 設定 |
+|---|---|
+| v1 | 正式設定（預測 30 分鐘、缺車門檻 2 台、含雨量） |
+| v2 | 預測 60 分鐘後 |
+| v3 | 缺車門檻 10 台 |
+| v4 | 60 分鐘後 + 門檻 10 台 |
+| v5 | 不用雨量特徵 |
 
 | | MAE（台） | 缺車 precision | 缺車 recall |
 |---|---|---|---|
@@ -107,12 +119,15 @@ flowchart LR
 ```bash
 pip install -r requirements.txt
 
+python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
 python train.py                              # 用正式設定訓練（存成 model_local.txt，不上傳）
-python train.py --horizon 60 --shortage 3    # 實驗：改預測時間與缺車門檻
+python train.py --no-weather                 # 實驗：不用雨量特徵
+python train.py --horizon 60 --shortage 10    # 實驗：改預測時間與缺車門檻
 python train.py --predict                    # 用正式模型預測，輸出 predictions.xlsx
 python analyze.py shortage --keyword 中央大學 # 各時段缺車時間比例
 python analyze.py plot --keyword 依仁堂 --official   # 實際 vs 預測對照圖
 python nearby.py --km 1.5                    # 中大周邊站點清單
+python weather.py --once                     # 測試雨量收集（需先設定 CWA_API_KEY）
 ```
 
 正式設定（`HORIZON`、`SHORTAGE`、`CLASS_STARTS`）寫在 `train.py` 最上方。修改後提交並同步，GitHub 會自動用新設定重訓；也可以到 Actions 按「立即重新訓練」。
@@ -125,16 +140,25 @@ python nearby.py --km 1.5                    # 中大周邊站點清單
 | `train-now.yml` | 手動立即重新訓練 |
 | `test-notify.yml` | 送一則測試通知，確認通知流程正常 |
 
-需要在 **Settings → Secrets and variables → Actions** 設定 `WEBHOOK_URL`（Power Automate 流程的網址）。
+需要在 **Settings → Secrets and variables → Actions** 設定：
+
+| Secret | 內容 |
+|---|---|
+| `WEBHOOK_URL` | Power Automate 流程的網址 |
+| `CWA_API_KEY` | 中央氣象署資料開放平台的授權碼（免費註冊取得） |
+
+沒有設定 `CWA_API_KEY` 時，系統會略過雨量、照常運作。
 
 ## 資料來源與授權
 
 - 桃園市政府交通局「桃園公共自行車即時服務資料」（[政府資料開放平臺](https://data.gov.tw/dataset/28228)），依《政府資料開放授權條款－第 1 版》使用。
-- 只使用站點層級的車數資料，不含任何個人資料。
+- 中央氣象署「自動雨量站－雨量觀測資料」（O-A0002-001，[政府資料開放平臺](https://data.gov.tw/dataset/9177)），依《政府資料開放授權條款－第 1 版》使用。
+- 只使用站點層級的車數與雨量資料，不含任何個人資料。
 
 ## 限制
 
 - 模型只能預測約 30 分鐘後，無法預測隔天或更遠的時間。
+- 雨量資料較晚開始收集，雨天樣本累積前，雨量特徵的效果有限。
 - Copilot Studio 小幫手的資料需要手動更新。
 - 預測可能有誤差，通知中會提醒使用者以現場為準。
 

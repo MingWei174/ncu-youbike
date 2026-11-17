@@ -4,8 +4,10 @@ YouBike 30 分鐘後可借車數預測（LightGBM）
 在你電腦上（做實驗，不用改檔案）：
   python train.py                              # 正式設定訓練 → 存成 model_local.txt（不上傳）
   python train.py --horizon 60                 # 實驗：預測 60 分鐘後
-  python train.py --shortage 3                 # 實驗：缺車門檻改 3 台
-  python train.py --horizon 60 --shortage 3    # 兩個一起試
+  python train.py --shortage 10                 # 實驗：缺車門檻改 10 台
+  python train.py --horizon 60 --shortage 10    # 兩個一起試
+  python train.py --no-weather                 # 實驗：不用雨量特徵（看天氣有沒有幫助）
+  python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
   python train.py --predict                    # 用 GitHub 的正式模型預測 → predictions.xlsx
 
 在 GitHub 上（自動，不用手動執行）：
@@ -29,6 +31,7 @@ from sklearn.metrics import mean_absolute_error, precision_score, recall_score
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data", "snapshots*.csv")   # 會讀 data 資料夾裡所有 snapshots 檔
+WEATHER = os.path.join(HERE, "data", "weather_*.csv")  # weather.py 收的雨量資料
 ON_GITHUB = bool(os.environ.get("GITHUB_ACTIONS"))
 
 # 正式模型（GitHub 訓練、會上傳）vs 本機實驗模型（不上傳）
@@ -40,7 +43,7 @@ LOCAL_META = os.path.join(HERE, "model_meta_local.json")
 # ===== 正式設定：實驗決定好之後改這裡，提交並同步 =====
 HORIZON = 30            # 預測幾分鐘後
 SHORTAGE = 2            # 可借車 ≤ 這個數字視為「缺車」
-CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
+CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]  # 中大上課節次
 # ======================================================
 
 MIN_DAYS = 7            # 資料至少幾天才自動訓練
@@ -50,9 +53,11 @@ NOTIFY_GAP_MIN = 60     # 同一站多久內不重複通知（分鐘）
 # GitHub 上用 alert_log.json（會存回 GitHub）；本機用另一個檔，避免同步時衝突
 ALERT_LOG = os.path.join(HERE, "alert_log.json" if ON_GITHUB else "alert_log_local.json")
 
-FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
-            "mins_to_class", "tot", "sbi", "fill_ratio",
-            "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3"]
+BASE_FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
+                 "mins_to_class", "tot", "sbi", "fill_ratio",
+                 "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3"]
+WEATHER_FEATURES = ["rain_10m", "rain_1h"]
+FEATURES = BASE_FEATURES + WEATHER_FEATURES     # 正式模型用的特徵
 
 
 def data_days():
@@ -74,6 +79,28 @@ def load(recent=None):
            .resample(STEP).mean().groupby(level=0).ffill(limit=2).dropna().reset_index())
     names = df.drop_duplicates("sno").set_index("sno")["sna"]
     g["sna"] = g["sno"].map(names)
+    return g.sort_values(["sno", "t"])
+
+
+def load_weather():
+    """讀雨量資料，對齊到 10 分鐘格點；沒有資料就回傳 None"""
+    files = sorted(glob.glob(WEATHER))
+    if not files:
+        return None
+    w = pd.concat([pd.read_csv(f, encoding="utf-8-sig") for f in files])
+    w["t"] = pd.to_datetime(w["fetch_time"]).dt.floor(STEP)
+    return w.groupby("t")[WEATHER_FEATURES].mean().reset_index().sort_values("t")
+
+
+def add_weather(g):
+    """把雨量併到每一筆站點資料（取 30 分鐘內最近一筆）；沒有雨量資料的時段留空，LightGBM 會自動處理"""
+    w = load_weather()
+    if w is None:
+        for c in WEATHER_FEATURES:
+            g[c] = np.nan
+        return g
+    g = g.sort_values("t")
+    g = pd.merge_asof(g, w, on="t", direction="backward", tolerance=pd.Timedelta("30min"))
     return g.sort_values(["sno", "t"])
 
 
@@ -99,7 +126,7 @@ def add_features(g, horizon_steps):
     g["sbi_diff1"] = g["sbi"] - g["sbi_lag1"]
     g["sbi_diff3"] = g["sbi"] - g["sbi_lag3"]
     g["target"] = by.shift(-horizon_steps)
-    return g
+    return add_weather(g)
 
 
 def read_meta(path=META):
@@ -118,12 +145,14 @@ def need_auto_retrain():
     age = (datetime.now() - trained).days
     if age >= RETRAIN_DAYS:
         return True, f"正式模型已經 {age} 天"
-    if meta.get("horizon") != HORIZON or meta.get("shortage") != SHORTAGE or meta.get("class_starts") != CLASS_STARTS:
-        return True, "train.py 的正式設定改了"
+    if (meta.get("horizon") != HORIZON or meta.get("shortage") != SHORTAGE
+            or meta.get("class_starts") != CLASS_STARTS or meta.get("features") != FEATURES):
+        return True, "train.py 的正式設定或特徵改了"
     return False, f"正式模型才 {age} 天，還不用重訓"
 
 
-def train(horizon, shortage, official):
+def train(horizon, shortage, official, features=None, quiet=False):
+    features = features or FEATURES
     steps = horizon // 10
     g = add_features(load(), steps)
     d = g.dropna(subset=["target", "sbi_lag6"])
@@ -133,9 +162,9 @@ def train(horizon, shortage, official):
     cut = d["t"].quantile(0.8)                       # 用時間切：前 80% 訓練，後 20% 測試
     tr, te = d[d["t"] <= cut], d[d["t"] > cut]
     m = lgb.LGBMRegressor(n_estimators=400, learning_rate=0.05, num_leaves=31, verbose=-1)
-    m.fit(tr[FEATURES], tr["target"])
+    m.fit(tr[features], tr["target"])
 
-    pred = np.clip(m.predict(te[FEATURES]), 0, te["tot"])
+    pred = np.clip(m.predict(te[features]), 0, te["tot"])
     base = te["sbi"]                                 # 基準：假設 horizon 分鐘後跟現在一樣
     y = te["target"]
     yc = (y <= shortage).astype(int)
@@ -147,21 +176,27 @@ def train(horizon, shortage, official):
     bp, br = cls(base)
     mp, mr = cls(pred)
     b_mae, m_mae = mean_absolute_error(y, base), mean_absolute_error(y, pred)
-    print(f"\n訓練 {tr['t'].min():%m/%d}–{tr['t'].max():%m/%d}  {len(tr)} 筆｜測試 {te['t'].min():%m/%d}–{te['t'].max():%m/%d}  {len(te)} 筆")
-    print(f"預測 {horizon} 分鐘後的可借車數，缺車門檻 ≤ {shortage} 台")
-    print(f"{'':12}{'MAE(台)':>10}{'缺車precision':>16}{'缺車recall':>12}")
-    print(f"{'基準(不變)':10}{b_mae:>10.2f}{bp:>16.2f}{br:>12.2f}")
-    print(f"{'LightGBM':12}{m_mae:>10.2f}{mp:>16.2f}{mr:>12.2f}")
-    imp = pd.Series(m.feature_importances_, FEATURES).sort_values(ascending=False)
-    print("\n最重要的特徵：", ", ".join(imp.index[:5]))
-
-    meta = {"horizon": horizon, "shortage": shortage, "class_starts": CLASS_STARTS,
+    imp = pd.Series(m.feature_importances_, features).sort_values(ascending=False)
+    has_rain = any(f in features for f in WEATHER_FEATURES)
+    rain_rows = int(d[WEATHER_FEATURES].notna().all(axis=1).sum()) if has_rain else 0
+    meta = {"horizon": horizon, "shortage": shortage, "class_starts": CLASS_STARTS, "features": features,
             "categories": list(g["station"].cat.categories),
             "trained_at": datetime.now().isoformat(timespec="seconds"),
             "data_from": f"{d['t'].min():%Y-%m-%d}", "data_to": f"{d['t'].max():%Y-%m-%d}",
+            "rows_train": len(tr), "rows_test": len(te), "rows_with_rain": rain_rows,
+            "top_features": list(imp.index[:5]),
             "test": {"model_mae": round(m_mae, 3), "base_mae": round(b_mae, 3),
                      "model_precision": round(mp, 3), "model_recall": round(mr, 3),
                      "base_precision": round(bp, 3), "base_recall": round(br, 3)}}
+    if quiet:
+        return meta
+
+    print(f"\n訓練 {tr['t'].min():%m/%d}–{tr['t'].max():%m/%d}  {len(tr)} 筆｜測試 {te['t'].min():%m/%d}–{te['t'].max():%m/%d}  {len(te)} 筆")
+    print(f"預測 {horizon} 分鐘後的可借車數，缺車門檻 ≤ {shortage} 台，{'有' if has_rain else '不用'}雨量特徵（有雨量的資料 {rain_rows} 筆）")
+    print(f"{'':12}{'MAE(台)':>10}{'缺車precision':>16}{'缺車recall':>12}")
+    print(f"{'基準(不變)':10}{b_mae:>10.2f}{bp:>16.2f}{br:>12.2f}")
+    print(f"{'LightGBM':12}{m_mae:>10.2f}{mp:>16.2f}{mr:>12.2f}")
+    print("\n最重要的特徵：", ", ".join(imp.index[:5]))
 
     if official:
         # 保護：新模型要贏過基準才替換正式模型
@@ -193,7 +228,8 @@ def predict(write_excel=True, recent=None, update_log=True):
     g["station"] = pd.Categorical(g["sno"], categories=meta["categories"])
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
     last = last[last["t"] == last["t"].max()]       # 只預測最新一批還有資料的站
-    p = np.clip(booster.predict(last[FEATURES]), 0, last["tot"]).round().astype(int)
+    feats = meta.get("features") or (FEATURES if booster.num_feature() == len(FEATURES) else BASE_FEATURES)
+    p = np.clip(booster.predict(last[feats]), 0, last["tot"]).round().astype(int)
     out = pd.DataFrame({
         "站點代號": last["sno"].values,
         "站名": last["sna"].values,
@@ -236,6 +272,7 @@ if __name__ == "__main__":
     a.add_argument("--predict", action="store_true", help="用正式模型預測，輸出 predictions.xlsx")
     a.add_argument("--horizon", type=int, default=HORIZON)
     a.add_argument("--shortage", type=int, default=SHORTAGE)
+    a.add_argument("--no-weather", action="store_true", help="實驗：不用雨量特徵")
     a.add_argument("--auto", action="store_true", help="GitHub 用：條件符合才重訓正式模型")
     a.add_argument("--force", action="store_true", help="GitHub 用：立刻重訓正式模型")
     args = a.parse_args()
@@ -254,4 +291,5 @@ if __name__ == "__main__":
             raise SystemExit(f"資料只有 {data_days()} 天，滿 {MIN_DAYS} 天才能訓練正式模型")
         train(HORIZON, SHORTAGE, official=True)
     else:
-        train(args.horizon, args.shortage, official=False)
+        train(args.horizon, args.shortage, official=False,
+              features=BASE_FEATURES if args.no_weather else FEATURES)
