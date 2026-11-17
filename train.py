@@ -1,10 +1,18 @@
 """
 YouBike 30 分鐘後可借車數預測（LightGBM）
 
-用法：
-  python train.py                 # 用 data/snapshots.csv 訓練 + 評估，模型存到 model.txt
-  python train.py --predict       # 用最新一筆資料預測，輸出 predictions.xlsx
-  python train.py --horizon 60    # 改成預測 60 分鐘後
+在你電腦上（做實驗，不用改檔案）：
+  python train.py                              # 正式設定訓練 → 存成 model_local.txt（不上傳）
+  python train.py --horizon 60                 # 實驗：預測 60 分鐘後
+  python train.py --shortage 3                 # 實驗：缺車門檻改 3 台
+  python train.py --horizon 60 --shortage 3    # 兩個一起試
+  python train.py --predict                    # 用 GitHub 的正式模型預測 → predictions.xlsx
+
+在 GitHub 上（自動，不用手動執行）：
+  python train.py --auto     # 資料滿 7 天、且模型超過 7 天才重訓；新模型比基準好才替換
+  python train.py --force    # 手動重訓（「立即重新訓練」按鈕用），一樣要比基準好才替換
+
+決定好正式設定後，改下面的 HORIZON / SHORTAGE / CLASS_STARTS 預設值，提交並同步。
 
 需要：pip install pandas lightgbm scikit-learn openpyxl
 """
@@ -12,6 +20,7 @@ import argparse
 import glob
 import json
 import os
+from datetime import datetime
 
 import lightgbm as lgb
 import numpy as np
@@ -20,21 +29,34 @@ from sklearn.metrics import mean_absolute_error, precision_score, recall_score
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data", "snapshots*.csv")   # 會讀 data 資料夾裡所有 snapshots 檔
+ON_GITHUB = bool(os.environ.get("GITHUB_ACTIONS"))
+
+# 正式模型（GitHub 訓練、會上傳）vs 本機實驗模型（不上傳）
 MODEL = os.path.join(HERE, "model.txt")
 META = os.path.join(HERE, "model_meta.json")
+LOCAL_MODEL = os.path.join(HERE, "model_local.txt")
+LOCAL_META = os.path.join(HERE, "model_meta_local.json")
+
+# ===== 正式設定：實驗決定好之後改這裡，提交並同步 =====
+HORIZON = 30            # 預測幾分鐘後
+SHORTAGE = 2            # 可借車 ≤ 這個數字視為「缺車」
+CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
+# ======================================================
+
+MIN_DAYS = 7            # 資料至少幾天才自動訓練
+RETRAIN_DAYS = 7        # 正式模型超過幾天自動重訓
 STEP = "10min"          # 重新取樣的時間格
-SHORTAGE = 2            # 可借車 ≤ 2 視為「缺車」
 NOTIFY_GAP_MIN = 60     # 同一站多久內不重複通知（分鐘）
 # GitHub 上用 alert_log.json（會存回 GitHub）；本機用另一個檔，避免同步時衝突
-ALERT_LOG = os.path.join(HERE, "alert_log.json" if os.environ.get("GITHUB_ACTIONS") else "alert_log_local.json")
-
-# 上課開始時間：請改成中大實際的節次時間
-CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
-
+ALERT_LOG = os.path.join(HERE, "alert_log.json" if ON_GITHUB else "alert_log_local.json")
 
 FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
             "mins_to_class", "tot", "sbi", "fill_ratio",
             "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3"]
+
+
+def data_days():
+    return len(glob.glob(DATA))
 
 
 def load(recent=None):
@@ -80,7 +102,28 @@ def add_features(g, horizon_steps):
     return g
 
 
-def train(horizon):
+def read_meta(path=META):
+    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else None
+
+
+def need_auto_retrain():
+    """--auto 用：回傳 (要不要訓練, 原因)"""
+    days = data_days()
+    if days < MIN_DAYS:
+        return False, f"資料只有 {days} 天，滿 {MIN_DAYS} 天才自動訓練"
+    meta = read_meta()
+    if not meta or not os.path.exists(MODEL):
+        return True, "還沒有正式模型"
+    trained = datetime.fromisoformat(meta.get("trained_at", "2000-01-01T00:00:00"))
+    age = (datetime.now() - trained).days
+    if age >= RETRAIN_DAYS:
+        return True, f"正式模型已經 {age} 天"
+    if meta.get("horizon") != HORIZON or meta.get("shortage") != SHORTAGE or meta.get("class_starts") != CLASS_STARTS:
+        return True, "train.py 的正式設定改了"
+    return False, f"正式模型才 {age} 天，還不用重訓"
+
+
+def train(horizon, shortage, official):
     steps = horizon // 10
     g = add_features(load(), steps)
     d = g.dropna(subset=["target", "sbi_lag6"])
@@ -93,37 +136,60 @@ def train(horizon):
     m.fit(tr[FEATURES], tr["target"])
 
     pred = np.clip(m.predict(te[FEATURES]), 0, te["tot"])
-    base = te["sbi"]                                 # 基準：假設 30 分鐘後跟現在一樣
+    base = te["sbi"]                                 # 基準：假設 horizon 分鐘後跟現在一樣
     y = te["target"]
-    yc = (y <= SHORTAGE).astype(int)
+    yc = (y <= shortage).astype(int)
 
     def cls(p):
-        pc = (p <= SHORTAGE).astype(int)
+        pc = (p <= shortage).astype(int)
         return precision_score(yc, pc, zero_division=0), recall_score(yc, pc, zero_division=0)
 
     bp, br = cls(base)
     mp, mr = cls(pred)
+    b_mae, m_mae = mean_absolute_error(y, base), mean_absolute_error(y, pred)
     print(f"\n訓練 {tr['t'].min():%m/%d}–{tr['t'].max():%m/%d}  {len(tr)} 筆｜測試 {te['t'].min():%m/%d}–{te['t'].max():%m/%d}  {len(te)} 筆")
-    print(f"預測 {horizon} 分鐘後的可借車數")
+    print(f"預測 {horizon} 分鐘後的可借車數，缺車門檻 ≤ {shortage} 台")
     print(f"{'':12}{'MAE(台)':>10}{'缺車precision':>16}{'缺車recall':>12}")
-    print(f"{'基準(不變)':10}{mean_absolute_error(y, base):>10.2f}{bp:>16.2f}{br:>12.2f}")
-    print(f"{'LightGBM':12}{mean_absolute_error(y, pred):>10.2f}{mp:>16.2f}{mr:>12.2f}")
+    print(f"{'基準(不變)':10}{b_mae:>10.2f}{bp:>16.2f}{br:>12.2f}")
+    print(f"{'LightGBM':12}{m_mae:>10.2f}{mp:>16.2f}{mr:>12.2f}")
     imp = pd.Series(m.feature_importances_, FEATURES).sort_values(ascending=False)
     print("\n最重要的特徵：", ", ".join(imp.index[:5]))
 
+    meta = {"horizon": horizon, "shortage": shortage, "class_starts": CLASS_STARTS,
+            "categories": list(g["station"].cat.categories),
+            "trained_at": datetime.now().isoformat(timespec="seconds"),
+            "data_from": f"{d['t'].min():%Y-%m-%d}", "data_to": f"{d['t'].max():%Y-%m-%d}",
+            "test": {"model_mae": round(m_mae, 3), "base_mae": round(b_mae, 3),
+                     "model_precision": round(mp, 3), "model_recall": round(mr, 3),
+                     "base_precision": round(bp, 3), "base_recall": round(br, 3)}}
+
+    if official:
+        # 保護：新模型要贏過基準才替換正式模型
+        if not (mr > br and m_mae <= b_mae):
+            print("\n⚠️ 新模型沒有贏過基準（缺車 recall 要更高、MAE 不能更差），保留原本的正式模型。")
+            return False
+        model_path, meta_path = MODEL, META
+    else:
+        model_path, meta_path = LOCAL_MODEL, LOCAL_META
+
     # 用 Python 寫檔，避免 LightGBM 在 Windows 讀不懂中文路徑
-    with open(MODEL, "w", encoding="utf-8") as f:
+    with open(model_path, "w", encoding="utf-8") as f:
         f.write(m.booster_.model_to_string())
-    json.dump({"horizon": horizon, "categories": list(g["station"].cat.categories)},
-              open(META, "w", encoding="utf-8"), ensure_ascii=False)
-    print(f"\n模型已存：{MODEL}")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=1)
+    print(f"\n模型已存：{os.path.basename(model_path)}" + ("（正式模型）" if official else "（本機實驗，不會上傳）"))
+    return True
 
 
-def predict(write_excel=True, recent=None):
-    meta = json.load(open(META, encoding="utf-8"))
+def predict(write_excel=True, recent=None, update_log=True):
+    """用正式模型（model.txt）預測最新一批資料"""
+    meta = read_meta()
+    if not meta or not os.path.exists(MODEL):
+        raise SystemExit("還沒有正式模型 model.txt（GitHub 資料滿 7 天後會自動訓練，或先同步）")
     with open(MODEL, encoding="utf-8") as f:
         booster = lgb.Booster(model_str=f.read())
-    g = add_features(load(recent), meta["horizon"] // 10)
+    h, shortage = meta["horizon"], meta.get("shortage", SHORTAGE)
+    g = add_features(load(recent), h // 10)
     g["station"] = pd.Categorical(g["sno"], categories=meta["categories"])
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
     last = last[last["t"] == last["t"].max()]       # 只預測最新一批還有資料的站
@@ -133,43 +199,59 @@ def predict(write_excel=True, recent=None):
         "站名": last["sna"].values,
         "資料時間": last["t"].dt.strftime("%Y-%m-%d %H:%M").values,
         "現在可借": last["sbi"].astype(int).values,
-        f"{meta['horizon']}分鐘後預測可借": p,
-        "缺車預警": np.where(p <= SHORTAGE, "是", "否"),
+        f"{h}分鐘後預測可借": p,
+        "缺車預警": np.where(p <= shortage, "是", "否"),
     })
     # 同一站 NOTIFY_GAP_MIN 分鐘內只通知一次
-    from datetime import datetime
     now = datetime.now()
     log = json.load(open(ALERT_LOG, encoding="utf-8")) if os.path.exists(ALERT_LOG) else {}
     notify = []
     for sno, alert in zip(out["站點代號"], out["缺車預警"]):
-        last = log.get(str(sno))
-        recent = last and (now - datetime.fromisoformat(last)).total_seconds() < NOTIFY_GAP_MIN * 60
-        if alert == "是" and not recent:
+        prev = log.get(str(sno))
+        too_soon = prev and (now - datetime.fromisoformat(prev)).total_seconds() < NOTIFY_GAP_MIN * 60
+        if alert == "是" and not too_soon:
             notify.append("是")
-            log[str(sno)] = now.isoformat(timespec="seconds")
+            if update_log:
+                log[str(sno)] = now.isoformat(timespec="seconds")
         else:
             notify.append("否")
     out["要通知"] = notify
-    with open(ALERT_LOG, "w", encoding="utf-8") as f:
-        json.dump(log, f, ensure_ascii=False, indent=1)
+    if update_log:
+        with open(ALERT_LOG, "w", encoding="utf-8") as f:
+            json.dump(log, f, ensure_ascii=False, indent=1)
 
-    if not write_excel:
-        return out
-
-    path = os.path.join(HERE, "predictions.xlsx")
-    with pd.ExcelWriter(path, engine="openpyxl") as w:
-        out.to_excel(w, sheet_name="預測", index=False)
-        ws = w.sheets["預測"]
-        from openpyxl.worksheet.table import Table
-        ws.add_table(Table(displayName="Pred", ref=ws.dimensions))  # Power Automate 讀 Excel 需要「表格」
-    print(out.to_string(index=False))
-    print(f"\n已輸出 {path}")
+    if write_excel:
+        path = os.path.join(HERE, "predictions.xlsx")
+        with pd.ExcelWriter(path, engine="openpyxl") as w:
+            out.to_excel(w, sheet_name="預測", index=False)
+            ws = w.sheets["預測"]
+            from openpyxl.worksheet.table import Table
+            ws.add_table(Table(displayName="Pred", ref=ws.dimensions))  # Power Automate 讀 Excel 需要「表格」
+        print(f"已輸出 {os.path.basename(path)}")
     return out
 
 
 if __name__ == "__main__":
     a = argparse.ArgumentParser()
-    a.add_argument("--predict", action="store_true")
-    a.add_argument("--horizon", type=int, default=30)
+    a.add_argument("--predict", action="store_true", help="用正式模型預測，輸出 predictions.xlsx")
+    a.add_argument("--horizon", type=int, default=HORIZON)
+    a.add_argument("--shortage", type=int, default=SHORTAGE)
+    a.add_argument("--auto", action="store_true", help="GitHub 用：條件符合才重訓正式模型")
+    a.add_argument("--force", action="store_true", help="GitHub 用：立刻重訓正式模型")
     args = a.parse_args()
-    predict() if args.predict else train(args.horizon)
+
+    if args.predict:
+        print(predict(update_log=False).to_string(index=False))
+    elif args.auto or args.force:
+        if not ON_GITHUB:
+            raise SystemExit("--auto / --force 只在 GitHub 上用。本機做實驗直接跑 python train.py")
+        if args.auto:
+            ok, why = need_auto_retrain()
+            print("自動訓練檢查：", why)
+            if not ok:
+                raise SystemExit(0)
+        elif data_days() < MIN_DAYS:
+            raise SystemExit(f"資料只有 {data_days()} 天，滿 {MIN_DAYS} 天才能訓練正式模型")
+        train(HORIZON, SHORTAGE, official=True)
+    else:
+        train(args.horizon, args.shortage, official=False)

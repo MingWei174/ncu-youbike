@@ -1,0 +1,31 @@
+name: 立即重新訓練
+
+# 改了 train.py 的正式設定、想馬上生效時，手動按 Run workflow
+# （資料要滿 7 天；新模型要贏過基準才會替換正式模型）
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: 重新訓練正式模型
+        run: python train.py --force
+      - name: 存回 GitHub
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          if git commit -q -m "重新訓練模型 $(date '+%m/%d %H:%M')"; then
+            git pull -q --rebase && git push -q
+          fi

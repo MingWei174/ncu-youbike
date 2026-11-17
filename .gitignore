@@ -2,9 +2,10 @@
 .venv/
 venv/
 __pycache__/
-predictions.xlsx
 shortage_ratio.xlsx
 plot_*.png
 alert_log_local.json
+model_local.txt
+model_meta_local.json
 *.JSON
 ~$*

@@ -1,7 +1,8 @@
 """
 自動預測 + 缺車通知（給 GitHub Actions 每 10 分鐘執行，也可以在本機測試）
 
-流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數 → 有站「要通知」就呼叫 Power Automate 的 webhook
+流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數 → 輸出 predictions.xlsx（給 Copilot Studio）
+      → 有站「要通知」就呼叫 Power Automate 的 webhook
 
 用法：
   python notify.py            # 正常執行
@@ -30,7 +31,13 @@ MAX_AGE_MIN = 30
 
 
 def horizon():
-    return json.load(open(train.META, encoding="utf-8"))["horizon"] if os.path.exists(train.META) else 30
+    m = train.read_meta()
+    return m["horizon"] if m else train.HORIZON
+
+
+def shortage():
+    m = train.read_meta()
+    return m.get("shortage", train.SHORTAGE) if m else train.SHORTAGE
 
 
 def build_payload(rows, test=False):
@@ -42,7 +49,7 @@ def build_payload(rows, test=False):
         f"<td><b>{r[pred_col]}</b></td><td>{html.escape(str(r['資料時間']))}</td></tr>"
         for r in rows)
     body = (
-        f"<p>以下站點預測 <b>{h} 分鐘後</b>可借車數 ≤ {train.SHORTAGE} 台，建議提早出門或改去附近的站。</p>"
+        f"<p>以下站點預測 <b>{h} 分鐘後</b>可借車數 ≤ {shortage()} 台，建議提早出門或改去附近的站。</p>"
         f"<table border='1' cellpadding='6' style='border-collapse:collapse'>"
         f"<tr><th>站名</th><th>現在可借</th><th>{h} 分鐘後預測</th><th>資料時間</th></tr>{trs}</table>"
         f"<p style='color:#666'>由機器學習模型自動預測，可能有誤差，請以現場為準。</p>"
@@ -67,17 +74,20 @@ def main():
                  "資料時間": datetime.now().strftime("%Y-%m-%d %H:%M")}]
     else:
         if not (os.path.exists(train.MODEL) and os.path.exists(train.META)):
-            print("還沒有 model.txt / model_meta.json，先在電腦上訓練後上傳到 GitHub。略過預測。")
+            print("還沒有正式模型 model.txt（資料滿 7 天後 GitHub 會自動訓練）。略過預測。")
             return
-        if not (NOTIFY_FROM <= now <= NOTIFY_TO):
-            print(f"現在 {now} 是安靜時段，不預測也不通知。")
-            return
-        out = train.predict(write_excel=False, recent=2)
+        # 1) 不管幾點，都先更新 predictions.xlsx（給 Copilot Studio 用）
+        out = train.predict(write_excel=True, recent=2, update_log=False)
         newest = datetime.strptime(out["資料時間"].max(), "%Y-%m-%d %H:%M")
         age = (datetime.now() - newest).total_seconds() / 60
+        # 2) 只有在通知時段、資料夠新時才發通知
+        if not (NOTIFY_FROM <= now <= NOTIFY_TO):
+            print(f"現在 {now} 是安靜時段，只更新預測檔、不通知。")
+            return
         if age > MAX_AGE_MIN:
             print(f"最新資料是 {age:.0f} 分鐘前，太舊了，不通知。")
             return
+        out = train.predict(write_excel=False, recent=2, update_log=True)
         kws = [k for k in WATCH.split(",") if k]
         if kws:
             out = out[out["站名"].astype(str).apply(lambda s: any(k in s for k in kws))]

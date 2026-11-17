@@ -7,6 +7,7 @@
   python analyze.py plot --keyword 依仁堂 --date 2026-11-24
                                                  # 某站某天：實際 vs 預測 → plot_依仁堂_2026-11-24.png
   python analyze.py plot --keyword 依仁堂        # 不指定日期 → 自動挑測試期間第一個平日
+  python analyze.py plot --keyword 依仁堂 --official   # 畫 GitHub 的正式模型
 """
 import argparse
 import os
@@ -23,10 +24,10 @@ HERE = train.HERE
 plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei", "Noto Sans CJK TC", "PingFang TC", "Arial Unicode MS", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
-# 想看的時段：可以自己改
-WINDOWS = [("早上 07:30–08:30", "07:30", "08:30"),
-           ("中午 11:50–13:10", "11:50", "13:10"),
-           ("下午 16:50–17:30", "16:50", "17:30"),
+# 想看的時段
+WINDOWS = [("早上 07:30–09:30", "07:30", "09:30"),
+           ("中午 11:50–13:30", "11:50", "13:30"),
+           ("下午 16:50–17:50", "16:50", "17:50"),
            ("全天 06:00–24:00", "06:00", "23:59")]
 
 
@@ -71,11 +72,19 @@ def shortage(keyword):
     print("簡報寫法範例：「平日早上 7:30–8:30，XX 站有 N% 的時間借不到車（資料期間 M/D–M/D，共 K 天）」")
 
 
-def plot(keyword, date):
+def plot(keyword, date, use_official=False):
     import json
     import lightgbm as lgb
-    meta = json.load(open(train.META, encoding="utf-8"))
-    with open(train.MODEL, encoding="utf-8") as f:
+    # 有本機實驗模型就畫它，沒有就畫 GitHub 的正式模型
+    if os.path.exists(train.LOCAL_MODEL) and not use_official:
+        mpath, metapath, which = train.LOCAL_MODEL, train.LOCAL_META, "本機實驗模型"
+    else:
+        mpath, metapath, which = train.MODEL, train.META, "正式模型"
+    if not os.path.exists(mpath):
+        raise SystemExit("找不到模型：先在本機跑 python train.py，或同步拿到 GitHub 的 model.txt")
+    print("使用：", which)
+    meta = json.load(open(metapath, encoding="utf-8"))
+    with open(mpath, encoding="utf-8") as f:
         booster = lgb.Booster(model_str=f.read())
     h = meta["horizon"]
     g = train.add_features(train.load(), h // 10)
@@ -125,5 +134,6 @@ if __name__ == "__main__":
     ap.add_argument("what", choices=["shortage", "plot"])
     ap.add_argument("--keyword", default=None)
     ap.add_argument("--date", default=None, help="YYYY-MM-DD")
+    ap.add_argument("--official", action="store_true", help="畫 GitHub 的正式模型（預設：有本機實驗模型就畫它）")
     a = ap.parse_args()
-    shortage(a.keyword) if a.what == "shortage" else plot(a.keyword, a.date)
+    shortage(a.keyword) if a.what == "shortage" else plot(a.keyword, a.date, a.official)
