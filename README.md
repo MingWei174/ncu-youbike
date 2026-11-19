@@ -69,8 +69,8 @@ flowchart LR
 |---|---|
 | v1 | 正式設定（預測 30 分鐘、缺車門檻 2 台、含雨量） |
 | v2 | 預測 60 分鐘後 |
-| v3 | 缺車門檻 3 台 |
-| v4 | 60 分鐘後 + 門檻 3 台 |
+| v3 | 缺車門檻 5 台 |
+| v4 | 60 分鐘後 + 門檻 5 台 |
 | v5 | 不用雨量特徵 |
 
 | | MAE（台） | 缺車 precision | 缺車 recall |
@@ -122,7 +122,7 @@ pip install -r requirements.txt
 python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
 python train.py                              # 用正式設定訓練（存成 model_local.txt，不上傳）
 python train.py --no-weather                 # 實驗：不用雨量特徵
-python train.py --horizon 60 --shortage 3    # 實驗：改預測時間與缺車門檻
+python train.py --horizon 60 --shortage 5    # 實驗：改預測時間與缺車門檻
 python train.py --predict                    # 用正式模型預測，輸出 predictions.xlsx
 python analyze.py shortage --keyword 中央大學 # 各時段缺車時間比例
 python analyze.py plot --keyword 依仁堂 --official   # 實際 vs 預測對照圖

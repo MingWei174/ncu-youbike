@@ -14,8 +14,8 @@ import train
 EXPERIMENTS = [
     ("v1", "正式設定（含雨量）", dict()),
     ("v2", "預測 60 分鐘後", dict(horizon=60)),
-    ("v3", "缺車門檻 10 台", dict(shortage=10)),
-    ("v4", "60 分鐘後 + 門檻 10 台", dict(horizon=60, shortage=10)),
+    ("v3", "缺車門檻 5 台", dict(shortage=5)),
+    ("v4", "60 分鐘後 + 門檻 5 台", dict(horizon=60, shortage=5)),
     ("v5", "不用雨量特徵", dict(features=train.BASE_FEATURES)),
 ]
 
