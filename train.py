@@ -4,7 +4,7 @@ YouBike 30 分鐘後可借車數預測（LightGBM）
 在你電腦上（做實驗，不用改檔案）：
   python train.py                              # 正式設定訓練 → 存成 model_local.txt（不上傳）
   python train.py --horizon 60                 # 實驗：預測 60 分鐘後
-  python train.py --shortage 10                 # 實驗：缺車門檻改 10 台
+  python train.py --shortage 5                 # 實驗：缺車門檻改 5 台
   python train.py --horizon 60 --shortage 10    # 兩個一起試
   python train.py --no-weather                 # 實驗：不用雨量特徵（看天氣有沒有幫助）
   python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
