@@ -5,7 +5,7 @@ YouBike 即時資料收集器
 用法：
   python collector.py --once            # 只抓一次（測試用）
   python collector.py --every 5         # 每 5 分鐘抓一次，一直跑
-  python collector.py --once --area 中壢區 --keyword 中央大學,中大
+  python collector.py --once --area 中壢區,平鎮區   # 中大校園橫跨兩區（國民運動中心站在平鎮區）
 
 預設網址來自政府資料開放平臺「桃園公共自行車即時服務資料」
 (https://data.gov.tw/dataset/28228) 的 JSON 下載連結。
@@ -21,7 +21,7 @@ from datetime import datetime
 
 import requests
 
-# ↓↓↓ 把資料平台上複製的 API 網址貼在這裡 ↓↓↓
+# 資料平台上複製的 API 網址 ↓
 API_URL = os.environ.get("YOUBIKE_API_URL", (
     "https://opendata.tycg.gov.tw/api/dataset/5ca2bfc7-9ace-4719-88ae-4034b9a5a55c"
     "/resource/08274d61-edbe-419d-8fcc-7a643831283d/download"
@@ -110,7 +110,8 @@ def save(rows, area=None, keywords=None, daily=False):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     out = OUT.replace("snapshots.csv", f"snapshots_{now[:10]}.csv") if daily else OUT
     if area:
-        rows = [r for r in rows if area in str(r["sarea"])]
+        areas = [a for a in area.split(",") if a]   # 可以給多個區，用逗號分隔
+        rows = [r for r in rows if any(a in str(r["sarea"]) for a in areas)]
     if keywords:
         rows = [r for r in rows if any(k in str(r["sna"]) for k in keywords)]
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -128,7 +129,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--once", action="store_true")
     p.add_argument("--every", type=float, default=5, help="間隔分鐘")
-    p.add_argument("--area", default=None, help="只存某行政區，例如 中壢區")
+    p.add_argument("--area", default=None, help="只存某些行政區，逗號分隔，例如 中壢區,平鎮區")
     p.add_argument("--keyword", default=None, help="站名關鍵字，逗號分隔")
     p.add_argument("--daily", action="store_true", help="每天存成一個檔案（雲端收集用）")
     a = p.parse_args()
