@@ -69,8 +69,8 @@ flowchart LR
 |---|---|
 | v1 | 正式設定（預測 30 分鐘、缺車門檻 2 台、含雨量） |
 | v2 | 預測 60 分鐘後 |
-| v3 | 缺車門檻 10 台 |
-| v4 | 60 分鐘後 + 門檻 10 台 |
+| v3 | 缺車門檻 3 台 |
+| v4 | 60 分鐘後 + 門檻 3 台 |
 | v5 | 不用雨量特徵 |
 
 | | MAE（台） | 缺車 precision | 缺車 recall |
@@ -105,14 +105,14 @@ flowchart LR
 
 ## 擴充性
 
-系統目前收集**整個中壢區**的站點資料，模型也是用中壢區所有站訓練。擴充只需要改設定，不需要重寫程式：
+系統目前收集**中壢區與平鎮區**的站點資料（中大校園橫跨兩區，「中央大學國民運動中心」站屬於平鎮區），模型也是用這些站訓練。擴充只需要改設定，不需要重寫程式：
 
 | 階段 | 範圍 | 要改什麼 |
 |---|---|---|
-| 現在 | 中大校內 2 站 | — |
+| 現在 | 中大校內 3 站（圖書館、依仁堂、國民運動中心） | — |
 | 下一步 | 中大通勤圈（周邊 1–1.5 公里） | `WATCH_KEYWORDS` 加入周邊站名 |
 | 中期 | 中壢其他校園，例如中原大學 | 加關鍵字，`CLASS_STARTS` 換成該校節次 |
-| 長期 | 整個桃園市，提供營運單位調度參考 | `collector.py` 拿掉 `--area 中壢區` |
+| 長期 | 整個桃園市，提供營運單位調度參考 | `collect.yml` 拿掉 `--area` 設定 |
 
 ## 在自己電腦上執行
 
@@ -122,7 +122,7 @@ pip install -r requirements.txt
 python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
 python train.py                              # 用正式設定訓練（存成 model_local.txt，不上傳）
 python train.py --no-weather                 # 實驗：不用雨量特徵
-python train.py --horizon 60 --shortage 10    # 實驗：改預測時間與缺車門檻
+python train.py --horizon 60 --shortage 3    # 實驗：改預測時間與缺車門檻
 python train.py --predict                    # 用正式模型預測，輸出 predictions.xlsx
 python analyze.py shortage --keyword 中央大學 # 各時段缺車時間比例
 python analyze.py plot --keyword 依仁堂 --official   # 實際 vs 預測對照圖
