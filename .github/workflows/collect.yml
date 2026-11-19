@@ -39,7 +39,7 @@ jobs:
           end=$(( $(date +%s) + 19800 ))
           while [ "$(date +%s)" -lt "$end" ]; do
             git pull -q --rebase || echo "拉取更新失敗，下次再試"
-            python collector.py --once --area 中壢區 --daily || echo "這次抓取失敗，10 分鐘後再試"
+            python collector.py --once --area 中壢區,平鎮區 --daily || echo "這次抓取失敗，10 分鐘後再試"
             python weather.py --once || echo "天氣資料抓取失敗，10 分鐘後再試"
             python train.py --auto || echo "自動訓練失敗，下次再試"
             python notify.py || echo "這次預測或通知失敗，10 分鐘後再試"
