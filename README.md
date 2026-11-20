@@ -35,7 +35,7 @@ flowchart LR
     F --> G[(predictions.xlsx)]
     F -->|中大站點預測缺車| H[Power Automate<br/>webhook]
     H --> I[Email 缺車預警]
-    G --> J[Copilot Studio<br/>通勤小幫手]
+    G --> J[Copilot Chat<br/>通勤小幫手]
 ```
 
 全部流程在 **GitHub Actions** 上自動執行：每次連續工作約 5.5 小時、每 10 分鐘一輪，結束前自動啟動下一輪，不需要任何人的電腦開著。
@@ -47,7 +47,7 @@ flowchart LR
 | 訓練正式模型 | `train.py --auto` | GitHub 自動：資料滿 7 天後開始，約每週一次；改了正式設定也會重訓 |
 | 預測與通知 | `notify.py` | GitHub 自動，每 10 分鐘 |
 | 缺車通知 | Power Automate（收到 Teams webhook 要求時 → 傳送電子郵件） | 自動 |
-| 對話小幫手 | Copilot Studio，讀取 `predictions.xlsx` | Demo 前手動更新資料 |
+| 對話小幫手 | Microsoft 365 Copilot Chat，上傳 `predictions.xlsx` 並貼上指示 | Demo 前手動上傳最新預測檔 |
 | 本機實驗 | `experiments.py`（一次跑完 v1–v5）或 `train.py --horizon … --shortage …` | 手動；結果寫進 `experiments.md`，不會動到正式模型 |
 | 簡報素材 | `analyze.py`、`nearby.py` | 手動 |
 
@@ -159,7 +159,7 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 - 模型只能預測約 30 分鐘後，無法預測隔天或更遠的時間。
 - 雨量資料較晚開始收集，雨天樣本累積前，雨量特徵的效果有限。
-- Copilot Studio 小幫手的資料需要手動更新。
+- Copilot Chat 小幫手的資料需要手動上傳（學校帳號沒有 Copilot Studio 授權）
 - 預測可能有誤差，通知中會提醒使用者以現場為準。
 
 ## 團隊
