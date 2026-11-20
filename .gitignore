@@ -4,6 +4,7 @@ venv/
 __pycache__/
 shortage_ratio.xlsx
 plot_*.png
+usage_*.png
 alert_log_local.json
 model_local.txt
 model_meta_local.json
