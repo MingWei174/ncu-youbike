@@ -229,7 +229,8 @@ def predict(write_excel=True, recent=None, update_log=True):
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
     last = last[last["t"] == last["t"].max()]       # 只預測最新一批還有資料的站
     feats = meta.get("features") or (FEATURES if booster.num_feature() == len(FEATURES) else BASE_FEATURES)
-    p = np.clip(booster.predict(last[feats]), 0, last["tot"]).round().astype(int)
+    p = np.asarray(np.clip(booster.predict(last[feats]), 0, last["tot"]).round().astype(int))
+    empty = np.maximum(last["tot"].round().astype(int).to_numpy() - p, 0)   # 預測空位 = 總車柱 − 預測可借
     out = pd.DataFrame({
         "站點代號": last["sno"].values,
         "站名": last["sna"].values,
@@ -237,21 +238,26 @@ def predict(write_excel=True, recent=None, update_log=True):
         "現在可借": last["sbi"].astype(int).values,
         f"{h}分鐘後預測可借": p,
         "缺車預警": np.where(p <= shortage, "是", "否"),
+        "預測空位": empty,
+        "滿柱預警": np.where(empty <= shortage, "是", "否"),
     })
-    # 同一站 NOTIFY_GAP_MIN 分鐘內只通知一次
+    # 同一站 NOTIFY_GAP_MIN 分鐘內只通知一次；缺車（empty）和滿柱（full）分開計算
     now = datetime.now()
     log = json.load(open(ALERT_LOG, encoding="utf-8")) if os.path.exists(ALERT_LOG) else {}
-    notify = []
-    for sno, alert in zip(out["站點代號"], out["缺車預警"]):
-        prev = log.get(str(sno))
-        too_soon = prev and (now - datetime.fromisoformat(prev)).total_seconds() < NOTIFY_GAP_MIN * 60
-        if alert == "是" and not too_soon:
-            notify.append("是")
-            if update_log:
-                log[str(sno)] = now.isoformat(timespec="seconds")
-        else:
-            notify.append("否")
+    notify, notify_full = [], []
+    for sno, a_empty, a_full in zip(out["站點代號"], out["缺車預警"], out["滿柱預警"]):
+        for kind, alert, result in (("empty", a_empty, notify), ("full", a_full, notify_full)):
+            key = f"{sno}:{kind}"
+            prev = log.get(key)
+            too_soon = prev and (now - datetime.fromisoformat(prev)).total_seconds() < NOTIFY_GAP_MIN * 60
+            if alert == "是" and not too_soon:
+                result.append("是")
+                if update_log:
+                    log[key] = now.isoformat(timespec="seconds")
+            else:
+                result.append("否")
     out["要通知"] = notify
+    out["要通知滿柱"] = notify_full
     if update_log:
         with open(ALERT_LOG, "w", encoding="utf-8") as f:
             json.dump(log, f, ensure_ascii=False, indent=1)

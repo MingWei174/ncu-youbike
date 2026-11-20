@@ -1,8 +1,8 @@
 """
 自動預測 + 缺車通知（給 GitHub Actions 每 10 分鐘執行，也可以在本機測試）
 
-流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數 → 輸出 predictions.xlsx（給 Copilot Studio）
-      → 有站「要通知」就呼叫 Power Automate 的 webhook
+流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數與空位 → 輸出 predictions.xlsx（給 Copilot Studio）
+      → 有站預測缺車或滿柱（「要通知」或「要通知滿柱」）就呼叫 Power Automate 的 webhook
 
 用法：
   python notify.py            # 正常執行
@@ -41,18 +41,26 @@ def shortage():
 
 
 def build_payload(rows, test=False):
-    title = ("【測試】" if test else "⚠️ ") + "YouBike 缺車預警：" + "、".join(str(r["站名"]) for r in rows)
+    title = ("【測試】" if test else "⚠️ ") + "YouBike 缺車／滿柱預警：" + "、".join(
+        f"{r['站名']}（{r['類型']}）" for r in rows)
     h = horizon()
     pred_col = f"{h}分鐘後預測可借"
     trs = "".join(
-        f"<tr><td>{html.escape(str(r['站名']))}</td><td>{r['現在可借']}</td>"
-        f"<td><b>{r[pred_col]}</b></td><td>{html.escape(str(r['資料時間']))}</td></tr>"
+        f"<tr><td>{html.escape(str(r['站名']))}</td><td>{r['類型']}</td><td>{r['現在可借']}</td>"
+        f"<td><b>{r[pred_col]}</b></td><td><b>{r['預測空位']}</b></td>"
+        f"<td>{html.escape(str(r['資料時間']))}</td></tr>"
         for r in rows)
+    tips = []
+    if any(r["類型"] == "缺車" for r in rows):
+        tips.append(f"<p>缺車：預測 <b>{h} 分鐘後</b>可借車數 ≤ {shortage()} 台，建議提早出門或改去附近的站。</p>")
+    if any(r["類型"] == "滿柱" for r in rows):
+        tips.append(f"<p>滿柱：預測 <b>{h} 分鐘後</b>空位 ≤ {shortage()} 個，建議改還附近的站。</p>")
     body = (
-        f"<p>以下站點預測 <b>{h} 分鐘後</b>可借車數 ≤ {shortage()} 台，建議提早出門或改去附近的站。</p>"
-        f"<table border='1' cellpadding='6' style='border-collapse:collapse'>"
-        f"<tr><th>站名</th><th>現在可借</th><th>{h} 分鐘後預測</th><th>資料時間</th></tr>{trs}</table>"
-        f"<p style='color:#666'>由機器學習模型自動預測，可能有誤差，請以現場為準。</p>"
+        "".join(tips)
+        + "<table border='1' cellpadding='6' style='border-collapse:collapse'>"
+        f"<tr><th>站名</th><th>類型</th><th>現在可借</th><th>{h} 分鐘後預測可借</th>"
+        f"<th>預測空位</th><th>資料時間</th></tr>{trs}</table>"
+        "<p style='color:#666'>由機器學習模型自動預測，可能有誤差，請以現場為準。</p>"
     )
     if test:
         body = "<p><b>這是設定用的測試通知，數字不代表真實狀況。</b></p>" + body
@@ -70,8 +78,10 @@ def main():
     now = datetime.now().strftime("%H:%M")
 
     if a.test:
-        rows = [{"站名": "（測試）中央大學依仁堂", "現在可借": 5, f"{horizon()}分鐘後預測可借": 1,
-                 "資料時間": datetime.now().strftime("%Y-%m-%d %H:%M")}]
+        t = datetime.now().strftime("%Y-%m-%d %H:%M")
+        pc = f"{horizon()}分鐘後預測可借"
+        rows = [{"站名": "（測試）中央大學依仁堂", "類型": "缺車", "現在可借": 5, pc: 1, "預測空位": 29, "資料時間": t},
+                {"站名": "（測試）中央大學圖書館", "類型": "滿柱", "現在可借": 26, pc: 29, "預測空位": 1, "資料時間": t}]
     else:
         if not (os.path.exists(train.MODEL) and os.path.exists(train.META)):
             print("還沒有正式模型 model.txt（資料滿 7 天後 GitHub 會自動訓練）。略過預測。")
@@ -92,7 +102,12 @@ def main():
         if kws:
             out = out[out["站名"].astype(str).apply(lambda s: any(k in s for k in kws))]
         print(out.to_string(index=False))
-        rows = out[out["要通知"] == "是"].to_dict("records")
+        rows = []
+        for r in out.to_dict("records"):
+            if r["要通知"] == "是":
+                rows.append({**r, "類型": "缺車"})
+            if r["要通知滿柱"] == "是":
+                rows.append({**r, "類型": "滿柱"})
         if not rows:
             print("沒有需要通知的站。")
             return
