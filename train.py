@@ -32,6 +32,7 @@ from sklearn.metrics import mean_absolute_error, precision_score, recall_score
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data", "snapshots*.csv")   # 會讀 data 資料夾裡所有 snapshots 檔
 WEATHER = os.path.join(HERE, "data", "weather_*.csv")  # weather.py 收的雨量資料
+CALENDAR = os.path.join(HERE, "calendar.csv")           # 中大行事曆：放假日、考試週
 ON_GITHUB = bool(os.environ.get("GITHUB_ACTIONS"))
 
 # 正式模型（GitHub 訓練、會上傳）vs 本機實驗模型（不上傳）
@@ -55,7 +56,8 @@ ALERT_LOG = os.path.join(HERE, "alert_log.json" if ON_GITHUB else "alert_log_loc
 
 BASE_FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
                  "mins_to_class", "tot", "sbi", "fill_ratio",
-                 "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3"]
+                 "sbi_lag1", "sbi_lag2", "sbi_lag3", "sbi_lag6", "sbi_diff1", "sbi_diff3",
+                 "is_holiday", "is_exam_week"]
 WEATHER_FEATURES = ["rain_10m", "rain_1h"]
 FEATURES = BASE_FEATURES + WEATHER_FEATURES     # 正式模型用的特徵
 
@@ -104,6 +106,19 @@ def add_weather(g):
     return g.sort_values(["sno", "t"])
 
 
+def load_calendar():
+    """讀 calendar.csv（欄位：日期,類型；類型為「放假」或「考試週」）。
+    回傳 {"放假": {date, ...}, "考試週": {date, ...}}；沒有檔案就回傳空的"""
+    cal = {"放假": set(), "考試週": set()}
+    if not os.path.exists(CALENDAR):
+        return cal
+    c = pd.read_csv(CALENDAR, encoding="utf-8-sig", dtype=str)
+    for day, kind in zip(pd.to_datetime(c["日期"].str.strip()).dt.date, c["類型"].str.strip()):
+        if kind in cal:
+            cal[kind].add(day)
+    return cal
+
+
 def mins_to_next_class(t):
     m = t.hour * 60 + t.minute
     starts = [int(s[:2]) * 60 + int(s[3:]) for s in CLASS_STARTS]
@@ -119,6 +134,10 @@ def add_features(g, horizon_steps):
     g["weekday"] = g["t"].dt.weekday
     g["is_weekend"] = (g["weekday"] >= 5).astype(int)
     g["mins_to_class"] = g["t"].map(mins_to_next_class)
+    cal = load_calendar()
+    day = g["t"].dt.date
+    g["is_holiday"] = day.isin(cal["放假"]).astype(int)
+    g["is_exam_week"] = day.isin(cal["考試週"]).astype(int)
     g["fill_ratio"] = g["sbi"] / g["tot"].replace(0, np.nan)
     by = g.groupby("sno", observed=True)["sbi"]
     for k in (1, 2, 3, 6):
