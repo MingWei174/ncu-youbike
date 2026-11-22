@@ -211,7 +211,7 @@ def plot(keyword, date, use_official=False):
     d = d[(d["t"].dt.hour >= 6)]
     if d.empty:
         raise SystemExit(f"{date} 沒有資料")
-    d["pred"] = np.clip(booster.predict(d[train.FEATURES]), 0, d["tot"])
+    d["pred"] = train.model_predict(booster, meta, d)   # 和 predict() 同一套算法
     d["when"] = d["t"] + pd.Timedelta(minutes=h)     # 預測是針對 h 分鐘後
     name = str(d["sna"].iloc[0]).replace("YouBike2.0_", "")
 
