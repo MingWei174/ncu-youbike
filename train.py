@@ -61,6 +61,16 @@ BASE_FEATURES = ["station", "hour", "minute_of_day", "weekday", "is_weekend",
 WEATHER_FEATURES = ["rain_10m", "rain_1h"]
 FEATURES = BASE_FEATURES + WEATHER_FEATURES     # 正式模型用的特徵
 
+# 模型預測的是「horizon 分鐘後會增減幾台」（不是直接預測車數），再加回現在的車數。
+# 這樣模型只要學「會變多少」；學不到東西時預測增減 ≈ 0，至少跟基準（車數不變）一樣。
+TARGET = "delta"
+
+# ── 保險（目前關閉）──────────────────────────────────────────────────────
+# 改成 True：GitHub 上還沒有任何正式模型時，第一個模型不管有沒有贏過基準都先存，
+# 讓 predictions.xlsx、通知、小幫手先動起來；之後的模型仍然要贏過基準才會替換。
+# 注意：在模型贏過基準之前，通知品質大約等於「看 App 當下的數字」，簡報要照實說。
+FIRST_MODEL_ANYWAY = False
+
 
 def data_days():
     return len(glob.glob(DATA))
@@ -152,6 +162,15 @@ def read_meta(path=META):
     return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else None
 
 
+def model_predict(booster, meta, X):
+    """用模型預測 horizon 分鐘後的可借車數（四捨五入成整數，介於 0 和總車柱之間）。
+    舊模型（meta 沒有 target）直接預測車數；新模型預測增減，要加回現在的車數 sbi。"""
+    raw = booster.predict(X[meta.get("features") or FEATURES])
+    if meta.get("target") == "delta":
+        raw = X["sbi"].to_numpy() + raw
+    return np.clip(raw, 0, X["tot"].to_numpy()).round().astype(int)
+
+
 def need_auto_retrain():
     """--auto 用：回傳 (要不要訓練, 原因)"""
     days = data_days()
@@ -165,7 +184,7 @@ def need_auto_retrain():
     if age >= RETRAIN_DAYS:
         return True, f"正式模型已經 {age} 天"
     if (meta.get("horizon") != HORIZON or meta.get("shortage") != SHORTAGE
-            or meta.get("class_starts") != CLASS_STARTS or meta.get("features") != FEATURES):
+            or meta.get("class_starts") != CLASS_STARTS or meta.get("features") != FEATURES or meta.get("target") != TARGET):
         return True, "train.py 的正式設定或特徵改了"
     return False, f"正式模型才 {age} 天，還不用重訓"
 
@@ -180,10 +199,12 @@ def train(horizon, shortage, official, features=None, quiet=False):
 
     cut = d["t"].quantile(0.8)                       # 用時間切：前 80% 訓練，後 20% 測試
     tr, te = d[d["t"] <= cut], d[d["t"] > cut]
-    m = lgb.LGBMRegressor(n_estimators=400, learning_rate=0.05, num_leaves=31, verbose=-1)
-    m.fit(tr[features], tr["target"])
+    # 預測增減（目標車數 − 現在車數）；用 L1（絕對誤差），不會被少數暴增暴減的情況拉走
+    m = lgb.LGBMRegressor(objective="l1", n_estimators=400, learning_rate=0.05, num_leaves=31, verbose=-1)
+    m.fit(tr[features], tr["target"] - tr["sbi"])
 
-    pred = np.clip(m.predict(te[features]), 0, te["tot"])
+    # 評估方式要和實際預測（predict）一樣：加回現在車數、四捨五入成整數
+    pred = np.clip(te["sbi"] + m.predict(te[features]), 0, te["tot"]).round()
     base = te["sbi"]                                 # 基準：假設 horizon 分鐘後跟現在一樣
     y = te["target"]
     yc = (y <= shortage).astype(int)
@@ -198,7 +219,7 @@ def train(horizon, shortage, official, features=None, quiet=False):
     imp = pd.Series(m.feature_importances_, features).sort_values(ascending=False)
     has_rain = any(f in features for f in WEATHER_FEATURES)
     rain_rows = int(d[WEATHER_FEATURES].notna().all(axis=1).sum()) if has_rain else 0
-    meta = {"horizon": horizon, "shortage": shortage, "class_starts": CLASS_STARTS, "features": features,
+    meta = {"horizon": horizon, "shortage": shortage, "target": TARGET, "class_starts": CLASS_STARTS, "features": features,
             "categories": list(g["station"].cat.categories),
             "trained_at": datetime.now().isoformat(timespec="seconds"),
             "data_from": f"{d['t'].min():%Y-%m-%d}", "data_to": f"{d['t'].max():%Y-%m-%d}",
@@ -219,7 +240,10 @@ def train(horizon, shortage, official, features=None, quiet=False):
 
     if official:
         # 保護：新模型要贏過基準才替換正式模型
-        if not (mr > br and m_mae <= b_mae):
+        beat = mr > br and m_mae <= b_mae
+        if not beat and FIRST_MODEL_ANYWAY and not os.path.exists(MODEL):
+            print("\n⚠️ 新模型沒有贏過基準，但目前還沒有正式模型：依 FIRST_MODEL_ANYWAY 先存下來讓系統運作。")
+        elif not beat:
             print("\n⚠️ 新模型沒有贏過基準（缺車 recall 要更高、MAE 不能更差），保留原本的正式模型。")
             return False
         model_path, meta_path = MODEL, META
@@ -247,8 +271,9 @@ def predict(write_excel=True, recent=None, update_log=True):
     g["station"] = pd.Categorical(g["sno"], categories=meta["categories"])
     last = g.groupby("sno").tail(1).dropna(subset=["sbi_lag6"])
     last = last[last["t"] == last["t"].max()]       # 只預測最新一批還有資料的站
-    feats = meta.get("features") or (FEATURES if booster.num_feature() == len(FEATURES) else BASE_FEATURES)
-    p = np.asarray(np.clip(booster.predict(last[feats]), 0, last["tot"]).round().astype(int))
+    if not meta.get("features"):   # 很舊的模型沒記特徵清單，用特徵數量判斷
+        meta["features"] = FEATURES if booster.num_feature() == len(FEATURES) else BASE_FEATURES
+    p = np.asarray(model_predict(booster, meta, last))
     empty = np.maximum(last["tot"].round().astype(int).to_numpy() - p, 0)   # 預測空位 = 總車柱 − 預測可借
     out = pd.DataFrame({
         "站點代號": last["sno"].values,
