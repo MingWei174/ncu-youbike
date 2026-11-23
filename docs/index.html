@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="中大 YouBike">
+<meta name="theme-color" content="#0f766e">
+<title>中大 YouBike 缺車預警</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --card: #fff; --text: #17201d; --muted: #63706b; --line: #e2e7e5;
+    --ok: #0f766e; --ok-bg: #e6f4f1; --bad: #c0392b; --bad-bg: #fdecea; --warn: #b45309; --warn-bg: #fef3e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111715; --card: #1a2220; --text: #e8eeec; --muted: #9aa8a3; --line: #2a3431;
+            --ok: #4fd1bd; --ok-bg: #16302b; --bad: #ff8a7a; --bad-bg: #3a1f1c; --warn: #f6b35a; --warn-bg: #3a2a15; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+         padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .stale { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 14px; }
+  h2 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 26px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .name { font-weight: 600; font-size: 17px; }
+  .badge { font-size: 13px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .b-bad { background: var(--bad-bg); color: var(--bad); }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .nums { display: flex; gap: 22px; margin-top: 10px; }
+  .num b { font-size: 26px; font-variant-numeric: tabular-nums; }
+  .num span { display: block; color: var(--muted); font-size: 13px; }
+  .tip { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .small .name { font-size: 15px; font-weight: 500; }
+  .small .nums { margin-top: 4px; }
+  .small .num b { font-size: 18px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
+  button { font: inherit; background: none; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 8px 14px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>中大 YouBike 缺車預警</h1>
+  <p class="sub" id="sub">載入中…</p>
+  <div id="stale"></div>
+  <h2>校內站</h2>
+  <div id="campus"></div>
+  <h2>附近 1.5 公里內的站</h2>
+  <div id="near"></div>
+  <button onclick="load()">重新整理</button>
+  <footer>
+    預測由機器學習模型每 10 分鐘自動更新，是估計值，可能有誤差；出門前也可以對照官方 App 的即時車數。<br>
+    缺車預警：預測可借車數 ≤ <span id="th">2</span> 台。滿柱預警：預測空位 ≤ <span id="th2">2</span> 個。<br>
+    <span id="model"></span>
+  </footer>
+</main>
+<script>
+// 資料來源：優先讀 GitHub 上最新的 predictions.json（不用等 Pages 重新發布），失敗再讀同資料夾的檔案
+function sources() {
+  const host = location.hostname, parts = location.pathname.split("/").filter(Boolean);
+  const list = [];
+  if (host.endsWith(".github.io") && parts.length) {
+    const owner = host.split(".")[0], repo = parts[0];
+    list.push(`https://raw.githubusercontent.com/${owner}/${repo}/main/docs/predictions.json`);
+  }
+  list.push("predictions.json");
+  return list;
+}
+
+async function fetchData() {
+  for (const url of sources()) {
+    try {
+      const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+      if (r.ok) return await r.json();
+    } catch (e) { /* 換下一個來源 */ }
+  }
+  throw new Error("讀不到資料");
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function badge(s) {
+  if (s.shortage) return '<span class="badge b-bad">可能沒車</span>';
+  if (s.full) return '<span class="badge b-warn">可能沒位還</span>';
+  return '<span class="badge b-ok">正常</span>';
+}
+
+function card(s, h, small, d) {
+  let tip = "";
+  if (!small && s.shortage) {
+    const alt = d.stations.filter(x => x.campus && x.name !== s.name && !x.shortage).sort((a, b) => b.pred - a.pred)[0];
+    tip = alt ? `建議提早出門，或改去「${esc(alt.name)}」（預測 ${alt.pred} 台）` : "校內各站都可能沒車，建議改搭公車或看下方附近的站";
+  } else if (!small && s.full) {
+    const alt = d.stations.filter(x => x.campus && x.name !== s.name && !x.full).sort((a, b) => (b.empty ?? 0) - (a.empty ?? 0))[0];
+    tip = alt ? `建議改還「${esc(alt.name)}」（預測空位 ${alt.empty} 個）` : "建議改還附近的站";
+  }
+  return `<div class="card ${small ? "small" : ""}">
+    <div class="row"><div class="name">${esc(s.name)}</div>${badge(s)}</div>
+    <div class="nums">
+      <div class="num"><b>${s.now}</b><span>現在可借</span></div>
+      <div class="num"><b>${s.pred}</b><span>${h} 分鐘後預測</span></div>
+      ${s.empty != null ? `<div class="num"><b>${s.empty}</b><span>預測空位</span></div>` : ""}
+    </div>
+    ${small ? `<div class="meta">距離校內站約 ${s.km} 公里</div>` : ""}
+    ${tip ? `<div class="tip">${tip}</div>` : ""}
+  </div>`;
+}
+
+async function load() {
+  try {
+    const d = await fetchData();
+    const h = d.horizon;
+    document.getElementById("sub").textContent = `資料時間 ${d.data_time}｜預測 ${h} 分鐘後`;
+    document.getElementById("th").textContent = d.shortage;
+    document.getElementById("th2").textContent = d.shortage;
+    document.getElementById("model").textContent = d.model_trained ? `目前模型訓練於 ${d.model_trained}` : "";
+    const age = (Date.now() - new Date(d.data_time.replace(" ", "T") + ":00+08:00")) / 60000;
+    document.getElementById("stale").innerHTML = age > 30
+      ? `<div class="stale">資料是 ${Math.round(age)} 分鐘前的，可能不是最新狀況，請以官方 App 為準。</div>` : "";
+    const campus = d.stations.filter(s => s.campus), near = d.stations.filter(s => !s.campus);
+    document.getElementById("campus").innerHTML = campus.map(s => card(s, h, false, d)).join("");
+    document.getElementById("near").innerHTML = near.length
+      ? near.map(s => card(s, h, true, d)).join("") : '<p class="meta">附近沒有其他站。</p>';
+  } catch (e) {
+    document.getElementById("sub").textContent = "目前讀不到預測資料，請稍後再試。";
+  }
+}
+
+load();
+setInterval(load, 2 * 60 * 1000);   // 開著的話每 2 分鐘自動更新
+</script>
+</body>
+</html>

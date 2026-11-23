@@ -17,6 +17,7 @@ Microsoft × NCU AI 創新應用主題挑戰賽（AI for Better Campus & Life）
 | 一般查詢 | 本系統 |
 |---|---|
 | 自己打開 App，看到「現在」幾台 | 預計缺車時**主動通知** |
+| 自己打開 App 查 | **手機查詢網頁**直接看「30 分鐘後」的預測，不用登入、不用安裝 |
 | 只告訴你這站有幾台 | 建議**提早出門、改去附近的站或改搭公車** |
 | 一般時段資料 | 模型特徵放進**中大的上課節次**，專門針對校園通勤尖峰 |
 
@@ -36,6 +37,8 @@ flowchart LR
     F -->|中大站點預測缺車| H[Power Automate<br/>webhook]
     H --> I[Email 缺車預警]
     G --> J[Copilot Chat<br/>通勤小幫手]
+    F --> K[(docs/predictions.json)]
+    K --> L[GitHub Pages<br/>手機查詢網頁]
 ```
 
 全部流程在 **GitHub Actions** 上自動執行：每次連續工作約 5.5 小時、每 10 分鐘一輪，結束前自動啟動下一輪，不需要任何人的電腦開著。
@@ -47,6 +50,7 @@ flowchart LR
 | 訓練正式模型 | `train.py --auto` | GitHub 自動：資料滿 7 天後開始，約每週一次；改了正式設定也會重訓 |
 | 預測與通知 | `notify.py` | GitHub 自動，每 10 分鐘 |
 | 缺車通知 | Power Automate（收到 Teams webhook 要求時 → 傳送電子郵件） | 自動 |
+| 手機查詢網頁 | `web.py`（寫 `docs/predictions.json`）、`docs/index.html` | GitHub 自動，每 10 分鐘；用 GitHub Pages 發布 |
 | 對話小幫手 | Microsoft 365 Copilot Chat，上傳 `predictions.xlsx` 並貼上指示 | Demo 前手動上傳最新預測檔 |
 | 本機實驗 | `experiments.py`（一次跑完 v1–v5）或 `train.py --horizon … --shortage …` | 手動；結果寫進 `experiments.md`，不會動到正式模型 |
 | 簡報素材 | `analyze.py`、`nearby.py` | 手動 |
@@ -149,6 +153,12 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 沒有設定 `CWA_API_KEY` 時，系統會略過雨量、照常運作。
 
+### 手機查詢網頁（GitHub Pages）
+
+網址：`https://mingwei174.github.io/ncu-youbike/`。顯示中大三站與附近 1.5 公里內各站的現在可借、30 分鐘後預測、預測空位與缺車／滿柱預警；校內站可能缺車時，會建議改去另一個預測有車的校內站。用手機瀏覽器開啟後「加入主畫面」，就能像 App 一樣使用。
+
+開啟方式（只做一次）：**Settings → Pages → Build and deployment → Source 選 Deploy from a branch → Branch 選 `main`、資料夾選 `/docs` → Save**。網頁每次打開都會讀 GitHub 上最新的 `docs/predictions.json`，不需要手動更新。
+
 ## 資料來源與授權
 
 - 桃園市政府交通局「桃園公共自行車即時服務資料」（[政府資料開放平臺](https://data.gov.tw/dataset/28228)），依《政府資料開放授權條款－第 1 版》使用。
@@ -159,7 +169,7 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 - 模型只能預測約 30 分鐘後，無法預測隔天或更遠的時間。
 - 雨量資料較晚開始收集，雨天樣本累積前，雨量特徵的效果有限。
-- Copilot Chat 小幫手的資料需要手動上傳（學校帳號沒有 Copilot Studio 授權）
+- Copilot Chat 小幫手的資料需要手動上傳（學校帳號沒有 Copilot Studio 授權）；日常查詢請用手機查詢網頁。
 - 預測可能有誤差，通知中會提醒使用者以現場為準。
 
 ## 團隊
@@ -167,6 +177,6 @@ python weather.py --once                     # 測試雨量收集（需先設定
 | 成員 | GitHub | 已完成 | 進行中／預計 |
 |---|---|---|---|
 | 113403547 張茗崴（組長） | MingWei174 | 資料收集（`collector.py`、GitHub Actions 接力收集、擴充至中壢區與平鎮區）、模型訓練與自動重訓（`train.py`）、自動預測與 Power Automate 通知（`notify.py`）、雨量特徵（`weather.py`）、實驗程式（`experiments.py`）、缺車比例與預測對照圖（`analyze.py shortage／plot`）、周邊站查詢（`nearby.py`）、README | 執行實驗 v1–v5 並選定正式設定、整合簡報、一起錄製與剪輯 Demo 影片、決賽問答準備 |
-| benson | benson12241224 | 還車滿柱預警（`train.py` 預測空位與滿柱預警、`notify.py` 通知同時列出缺車與滿柱）、Copilot Chat 小幫手指示與 10 題測試題（`copilot_instructions.md`） | 正式模型產出後執行小幫手測試 C（10 題，目標答對 ≥ 8 題）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
+| 113403056 蔡博宇 | benson12241224 | 還車滿柱預警（`train.py` 預測空位與滿柱預警、`notify.py` 通知同時列出缺車與滿柱）、Copilot Chat 小幫手指示與 10 題測試題（`copilot_instructions.md`） | 正式模型產出後執行小幫手測試 C（10 題，目標答對 ≥ 8 題）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403032 吳絃紘 | cool804 | 行事曆特徵（`calendar.csv`、`train.py` 加入放假與考試週特徵）、問卷分析程式（`survey.py`）、Forms 問卷建立與發放 | 行事曆特徵實驗結果寫入 `experiments.md`、問卷截止後（11/30）用正式資料統計並產出圖表 、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403541 劉亮廷 | Leon159892 | 使用量分析（`analyze.py usage`，估計借出台數與星期 × 小時熱力圖）、實地驗證計算程式（`field_tests.py`） | 實地驗證（11/24–11/28，至少 3 個平日早上）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |

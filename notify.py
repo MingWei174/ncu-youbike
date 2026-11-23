@@ -1,7 +1,7 @@
 """
 自動預測 + 缺車通知（給 GitHub Actions 每 10 分鐘執行，也可以在本機測試）
 
-流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數與空位 → 輸出 predictions.xlsx（給 Copilot Studio）
+流程：讀最新資料 → 用 model.txt 預測 30 分鐘後車數與空位 → 輸出 predictions.xlsx（給 Copilot Chat 小幫手）與 docs/predictions.json（給手機查詢網頁）
       → 有站預測缺車或滿柱（「要通知」或「要通知滿柱」）就呼叫 Power Automate 的 webhook
 
 用法：
@@ -86,8 +86,14 @@ def main():
         if not (os.path.exists(train.MODEL) and os.path.exists(train.META)):
             print("還沒有正式模型 model.txt（資料滿 7 天後 GitHub 會自動訓練）。略過預測。")
             return
-        # 1) 不管幾點，都先更新 predictions.xlsx（給 Copilot Studio 用）
+        # 1) 不管幾點，都先更新 predictions.xlsx 和手機網頁資料
         out = train.predict(write_excel=True, recent=2, update_log=False)
+        if os.environ.get("GITHUB_ACTIONS"):   # 手機網頁資料只由 GitHub 更新；失敗不影響通知
+            try:
+                import web
+                web.write_web(out)
+            except Exception as e:
+                print("手機網頁資料更新失敗：", e)
         newest = datetime.strptime(out["資料時間"].max(), "%Y-%m-%d %H:%M")
         age = (datetime.now() - newest).total_seconds() / 60
         # 2) 只有在通知時段、資料夠新時才發通知
