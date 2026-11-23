@@ -54,7 +54,7 @@
   <div id="campus"></div>
   <h2>附近 1.5 公里內的站</h2>
   <div id="near"></div>
-  <button onclick="load()">重新整理</button>
+  <button id="btn" onclick="load()">重新整理</button> <span class="meta" id="checked"></span>
   <footer>
     預測由機器學習模型每 10 分鐘自動更新，是估計值，可能有誤差；出門前也可以對照官方 App 的即時車數。<br>
     缺車預警：預測可借車數 ≤ <span id="th">2</span> 台。滿柱預警：預測空位 ≤ <span id="th2">2</span> 個。<br>
@@ -114,6 +114,8 @@ function card(s, h, small, d) {
 }
 
 async function load() {
+  const btn = document.getElementById("btn");
+  btn.disabled = true; btn.textContent = "更新中…";
   try {
     const d = await fetchData();
     const h = d.horizon;
@@ -128,8 +130,12 @@ async function load() {
     document.getElementById("campus").innerHTML = campus.map(s => card(s, h, false, d)).join("");
     document.getElementById("near").innerHTML = near.length
       ? near.map(s => card(s, h, true, d)).join("") : '<p class="meta">附近沒有其他站。</p>';
+    document.getElementById("checked").textContent =
+      "已檢查最新資料（" + new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) + "）";
   } catch (e) {
     document.getElementById("sub").textContent = "目前讀不到預測資料，請稍後再試。";
+  } finally {
+    btn.disabled = false; btn.textContent = "重新整理";
   }
 }
 
