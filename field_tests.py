@@ -80,7 +80,7 @@ def report(path):
     print(f"資料來源：{os.path.basename(path)}")
     if df.empty:
         print("\n目前是空的（只有欄位標題）。先去實地驗證，把結果填進去再跑一次。")
-        print("每天的做法：7:30 同步並打開 predictions.xlsx，記下依仁堂、圖書館的「資料時間」和")
+        print("每天的做法：7:30 同步並打開 predictions.xlsx，記下中大三站（依仁堂、圖書館、國民運動中心）的「資料時間」和")
         print("「30分鐘後預測可借」；到「資料時間 + 30 分鐘」去現場數車或 App 截圖，再填進這個檔。")
         return
 
