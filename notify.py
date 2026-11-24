@@ -96,6 +96,11 @@ def main():
                 web.write_web(out)
             except Exception as e:
                 print("手機網頁資料更新失敗：", e)
+            try:   # 記下這次實際發出的預測，之後用 live_eval.py 和真正的車數對照
+                import live_eval
+                live_eval.log_predictions(out)
+            except Exception as e:
+                print("上線預測紀錄失敗：", e)
         newest = datetime.strptime(out["資料時間"].max(), "%Y-%m-%d %H:%M")
         age = (datetime.now() - newest).total_seconds() / 60
         # 2) 只有在通知時段、資料夠新時才發通知

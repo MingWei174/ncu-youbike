@@ -343,3 +343,15 @@ if __name__ == "__main__":
         print(predict(update_log=False).to_string(index=False))
     elif args.auto or args.force:
         if not ON_GITHUB:
+            raise SystemExit("--auto / --force 只在 GitHub 上用。本機做實驗直接跑 python train.py")
+        if args.auto:
+            ok, why = need_auto_retrain()
+            print("自動訓練檢查：", why)
+            if not ok:
+                raise SystemExit(0)
+        elif data_days() < MIN_DAYS:
+            raise SystemExit(f"資料只有 {data_days()} 天，滿 {MIN_DAYS} 天才能訓練正式模型")
+        train(HORIZON, SHORTAGE, official=True)
+    else:
+        train(args.horizon, args.shortage, official=False,
+              features=BASE_FEATURES if args.no_weather else FEATURES)

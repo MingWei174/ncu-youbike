@@ -52,6 +52,7 @@ flowchart LR
 | 缺車通知 | Power Automate（收到 Teams webhook 要求時 → 傳送電子郵件） | 自動 |
 | 手機查詢網頁 | `web.py`（寫 `docs/predictions.json`）、`docs/index.html` | GitHub 自動，每 10 分鐘；用 GitHub Pages 發布 |
 | 對話小幫手 | Microsoft 365 Copilot Chat，上傳 `predictions.xlsx` 並貼上指示 | Demo 前手動上傳最新預測檔 |
+| 上線預測紀錄 | `live_eval.py`（寫 `data/pred_log_日期.csv`） | GitHub 自動，每 10 分鐘記下中大站點實際發出的預測；`python live_eval.py` 手動對照 |
 | 本機實驗 | `experiments.py`（一次跑完 v1–v5）或 `train.py --horizon … --shortage …` | 手動；結果寫進 `experiments.md`，不會動到正式模型 |
 | 簡報素材 | `analyze.py`、`nearby.py` | 手動 |
 
@@ -81,6 +82,17 @@ flowchart LR
 |---|---|---|---|
 | 基準（不變） | | | |
 | LightGBM | | | |
+
+### 上線後的真實表現
+
+模型測試（上表）是拿歷史資料切出測試集；另外，系統從 11/24 起把**每 10 分鐘實際發出的預測**記在 `data/pred_log_日期.csv`，30 分鐘後再和真正的車數對照。這不是事後回測，而是系統運作中的真實表現，和實地驗證同樣的意義，但樣本多很多、不需要人到現場。
+
+```bash
+python live_eval.py        # 印出模型與基準的 MAE、缺車判斷正確率、recall、precision、漏報、誤報，並分站列出
+python live_eval.py --md   # 另外把結果附加到 live_eval.md，提交後就留在 GitHub
+```
+
+> 待累積足夠天數後更新（簡報前跑一次）。實地驗證（`field_tests.csv`，到現場或用 App 截圖對照）是小樣本的現場抽查，兩者一起看。
 
 ## 通知的保護機制
 
@@ -130,6 +142,8 @@ python train.py                              # 用正式設定訓練（存成 mo
 python train.py --no-weather                 # 實驗：不用雨量特徵
 python train.py --horizon 60 --shortage 5    # 實驗：改預測時間與缺車門檻
 python train.py --predict                    # 用正式模型預測，輸出 predictions.xlsx
+python live_eval.py                          # 上線後實際預測 vs 真正車數
+python field_tests.py                        # 實地驗證統計（field_tests.csv）
 python analyze.py shortage --keyword 中央大學 # 各時段缺車時間比例
 python analyze.py plot --keyword 依仁堂 --official   # 實際 vs 預測對照圖
 python nearby.py --km 1.5                    # 中大周邊站點清單
@@ -178,7 +192,7 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 | 成員 | GitHub | 已完成 | 進行中／預計 |
 |---|---|---|---|
-| 113403547 張茗崴（組長） | MingWei174 | 資料收集（`collector.py`、GitHub Actions 接力收集、擴充至中壢區與平鎮區）、模型訓練與自動重訓（`train.py`）、自動預測與 Power Automate 通知（`notify.py`）、雨量特徵（`weather.py`）、實驗程式（`experiments.py`）、缺車比例與預測對照圖（`analyze.py shortage／plot`）、周邊站查詢（`nearby.py`）、README、手機查詢網頁（`web.py`、`docs/index.html`，GitHub Pages）、通知改為只在狀況改變時發送（即將／持續缺車與滿柱） | 執行實驗 v1–v5 並選定正式設定、整合簡報、一起錄製與剪輯 Demo 影片、決賽問答準備 |
+| 113403547 張茗崴（組長） | MingWei174 | 資料收集（`collector.py`、GitHub Actions 接力收集、擴充至中壢區與平鎮區）、模型訓練與自動重訓（`train.py`）、自動預測與 Power Automate 通知（`notify.py`）、雨量特徵（`weather.py`）、實驗程式（`experiments.py`）、缺車比例與預測對照圖（`analyze.py shortage／plot`）、周邊站查詢（`nearby.py`）、README、手機查詢網頁（`web.py`、`docs/index.html`，GitHub Pages）、通知改為只在狀況改變時發送（即將／持續缺車與滿柱）、上線預測紀錄與對照（`live_eval.py`） | 執行實驗 v1–v5 並選定正式設定、整合簡報、一起錄製與剪輯 Demo 影片、決賽問答準備 |
 | 113403056 蔡博宇 | benson12241224 | 還車滿柱預警（`train.py` 預測空位與滿柱預警、`notify.py` 通知同時列出缺車與滿柱）、Copilot Chat 小幫手指示與 10 題測試題（`copilot_instructions.md`） | 正式模型產出後執行小幫手測試 C（10 題，目標答對 ≥ 8 題）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403032 吳絃紘 | cool804 | 行事曆特徵（`calendar.csv`、`train.py` 加入放假與考試週特徵）、問卷分析程式（`survey.py`）、Forms 問卷建立與發放 | 行事曆特徵實驗結果寫入 `experiments.md`、問卷截止後（11/30）用正式資料統計並產出圖表 、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403541 劉亮廷 | Leon159892 | 使用量分析（`analyze.py usage`，估計借出台數與星期 × 小時熱力圖）、實地驗證計算程式（`field_tests.py`） | 實地驗證（11/24–11/28，至少 3 個平日早上）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
