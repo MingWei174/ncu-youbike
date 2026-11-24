@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-24 23:01",
- "data_time": "2026-11-24 23:00",
+ "generated": "2026-11-24 23:11",
+ "data_time": "2026-11-24 23:10",
  "horizon": 30,
  "shortage": 2,
  "model_trained": "2026-11-23 08:43",
@@ -14,7 +14,7 @@
    "empty": 34,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.96813,
    "lng": 121.19467
   },
@@ -27,7 +27,7 @@
    "empty": 36,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.96712,
    "lng": 121.19096
   },
@@ -35,12 +35,12 @@
    "name": "中央大學國民運動中心",
    "campus": true,
    "km": 0.0,
-   "now": 2,
-   "pred": 2,
-   "empty": 33,
+   "now": 1,
+   "pred": 1,
+   "empty": 34,
    "shortage": true,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.96976,
    "lng": 121.19037
   },
@@ -53,7 +53,7 @@
    "empty": 10,
    "shortage": true,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.95901,
    "lng": 121.1922
   },
@@ -66,7 +66,7 @@
    "empty": 11,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.95796,
    "lng": 121.19022
   },
@@ -79,7 +79,7 @@
    "empty": 9,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.96728,
    "lng": 121.17791
   },
@@ -88,11 +88,11 @@
    "campus": false,
    "km": 1.43,
    "now": 18,
-   "pred": 20,
-   "empty": 22,
+   "pred": 19,
+   "empty": 23,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.958867,
    "lng": 121.204579
   },
@@ -105,7 +105,7 @@
    "empty": 15,
    "shortage": false,
    "full": false,
-   "time": "2026-11-24 23:00",
+   "time": "2026-11-24 23:10",
    "lat": 24.95701,
    "lng": 121.20262
   }
