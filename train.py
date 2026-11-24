@@ -50,7 +50,8 @@ CLASS_STARTS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "
 MIN_DAYS = 7            # 資料至少幾天才自動訓練
 RETRAIN_DAYS = 7        # 正式模型超過幾天自動重訓
 STEP = "10min"          # 重新取樣的時間格
-NOTIFY_GAP_MIN = 60     # 同一站多久內不重複通知（分鐘）
+NOTIFY_GAP_MIN = 60     # 「即將缺車／滿柱」：同一站多久內不重複通知（分鐘）
+REMIND_GAP_MIN = 180    # 「持續缺車／滿柱」（現在就已經沒車／沒位）：多久才再提醒一次（分鐘）
 # GitHub 上用 alert_log.json（會存回 GitHub）；本機用另一個檔，避免同步時衝突
 ALERT_LOG = os.path.join(HERE, "alert_log.json" if ON_GITHUB else "alert_log_local.json")
 
@@ -285,23 +286,34 @@ def predict(write_excel=True, recent=None, update_log=True):
         "預測空位": empty,
         "滿柱預警": np.where(empty <= shortage, "是", "否"),
     })
-    # 同一站 NOTIFY_GAP_MIN 分鐘內只通知一次；缺車（empty）和滿柱（full）分開計算
+    # 只在「狀況變了」時通知（缺車 empty 和滿柱 full 分開計算）：
+    #   即將：現在還有車（有位），但預測會缺車（滿柱）→ 真正的預警，NOTIFY_GAP_MIN 內不重複
+    #   持續：現在就已經沒車（沒位）→ 第一次照常通知，之後 REMIND_GAP_MIN 才再提醒一次
+    #   （避免一整天都缺車的站每小時都寄一封一樣的信）
     now = datetime.now()
     log = json.load(open(ALERT_LOG, encoding="utf-8")) if os.path.exists(ALERT_LOG) else {}
-    notify, notify_full = [], []
-    for sno, a_empty, a_full in zip(out["站點代號"], out["缺車預警"], out["滿柱預警"]):
-        for kind, alert, result in (("empty", a_empty, notify), ("full", a_full, notify_full)):
+    now_empty = (last["tot"].round().astype(int) - last["sbi"].astype(int)).clip(lower=0).to_numpy()
+    already = {"empty": last["sbi"].to_numpy() <= shortage, "full": now_empty <= shortage}
+    notify, notify_full, kind_note = [], [], []
+    for i, (sno, a_empty, a_full) in enumerate(zip(out["站點代號"], out["缺車預警"], out["滿柱預警"])):
+        notes = []
+        for kind, alert, result, word in (("empty", a_empty, notify, "缺車"), ("full", a_full, notify_full, "滿柱")):
             key = f"{sno}:{kind}"
             prev = log.get(key)
-            too_soon = prev and (now - datetime.fromisoformat(prev)).total_seconds() < NOTIFY_GAP_MIN * 60
-            if alert == "是" and not too_soon:
+            since = (now - datetime.fromisoformat(prev)).total_seconds() / 60 if prev else None
+            ongoing = bool(already[kind][i])
+            gap = REMIND_GAP_MIN if ongoing else NOTIFY_GAP_MIN
+            if alert == "是" and (since is None or since >= gap):
                 result.append("是")
+                notes.append(("持續" if ongoing else "即將") + word)
                 if update_log:
                     log[key] = now.isoformat(timespec="seconds")
             else:
                 result.append("否")
+        kind_note.append("、".join(notes))
     out["要通知"] = notify
     out["要通知滿柱"] = notify_full
+    out["通知說明"] = kind_note
     if update_log:
         with open(ALERT_LOG, "w", encoding="utf-8") as f:
             json.dump(log, f, ensure_ascii=False, indent=1)
@@ -331,15 +343,3 @@ if __name__ == "__main__":
         print(predict(update_log=False).to_string(index=False))
     elif args.auto or args.force:
         if not ON_GITHUB:
-            raise SystemExit("--auto / --force 只在 GitHub 上用。本機做實驗直接跑 python train.py")
-        if args.auto:
-            ok, why = need_auto_retrain()
-            print("自動訓練檢查：", why)
-            if not ok:
-                raise SystemExit(0)
-        elif data_days() < MIN_DAYS:
-            raise SystemExit(f"資料只有 {data_days()} 天，滿 {MIN_DAYS} 天才能訓練正式模型")
-        train(HORIZON, SHORTAGE, official=True)
-    else:
-        train(args.horizon, args.shortage, official=False,
-              features=BASE_FEATURES if args.no_weather else FEATURES)

@@ -84,7 +84,9 @@ flowchart LR
 
 ## 通知的保護機制
 
-- 同一站一小時內只通知一次
+- **只在狀況改變時通知**：分成兩種
+  - **即將缺車／滿柱**：現在還有車（有位），但預測 30 分鐘後會缺車（滿柱）。這是真正的預警，同一站一小時內只通知一次
+  - **持續缺車／滿柱**：現在就已經沒車（沒位）。第一次照常通知，之後每 3 小時才再提醒一次，避免一整天都缺車的站每小時寄一樣的信（11/24 雨天國民運動中心整天缺車，舊規則寄了 8 封，新規則只會寄 3 封）
 - 06:30 前、22:00 後不通知
 - 最新資料超過 30 分鐘（例如收集中斷）就不通知，避免用舊資料誤報
 - 只通知中大校內站點（`collect.yml` 的 `WATCH_KEYWORDS` 設定）
@@ -176,7 +178,7 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 | 成員 | GitHub | 已完成 | 進行中／預計 |
 |---|---|---|---|
-| 113403547 張茗崴（組長） | MingWei174 | 資料收集（`collector.py`、GitHub Actions 接力收集、擴充至中壢區與平鎮區）、模型訓練與自動重訓（`train.py`）、自動預測與 Power Automate 通知（`notify.py`）、雨量特徵（`weather.py`）、實驗程式（`experiments.py`）、缺車比例與預測對照圖（`analyze.py shortage／plot`）、周邊站查詢（`nearby.py`）、README | 執行實驗 v1–v5 並選定正式設定、整合簡報、一起錄製與剪輯 Demo 影片、決賽問答準備 |
+| 113403547 張茗崴（組長） | MingWei174 | 資料收集（`collector.py`、GitHub Actions 接力收集、擴充至中壢區與平鎮區）、模型訓練與自動重訓（`train.py`）、自動預測與 Power Automate 通知（`notify.py`）、雨量特徵（`weather.py`）、實驗程式（`experiments.py`）、缺車比例與預測對照圖（`analyze.py shortage／plot`）、周邊站查詢（`nearby.py`）、README、手機查詢網頁（`web.py`、`docs/index.html`，GitHub Pages）、通知改為只在狀況改變時發送（即將／持續缺車與滿柱） | 執行實驗 v1–v5 並選定正式設定、整合簡報、一起錄製與剪輯 Demo 影片、決賽問答準備 |
 | 113403056 蔡博宇 | benson12241224 | 還車滿柱預警（`train.py` 預測空位與滿柱預警、`notify.py` 通知同時列出缺車與滿柱）、Copilot Chat 小幫手指示與 10 題測試題（`copilot_instructions.md`） | 正式模型產出後執行小幫手測試 C（10 題，目標答對 ≥ 8 題）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403032 吳絃紘 | cool804 | 行事曆特徵（`calendar.csv`、`train.py` 加入放假與考試週特徵）、問卷分析程式（`survey.py`）、Forms 問卷建立與發放 | 行事曆特徵實驗結果寫入 `experiments.md`、問卷截止後（11/30）用正式資料統計並產出圖表 、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |
 | 113403541 劉亮廷 | Leon159892 | 使用量分析（`analyze.py usage`，估計借出台數與星期 × 小時熱力圖）、實地驗證計算程式（`field_tests.py`） | 實地驗證（11/24–11/28，至少 3 個平日早上）、 一起錄製與剪輯 60 秒 Demo 影片 、決賽問答準備 |

@@ -51,10 +51,12 @@ def build_payload(rows, test=False):
         f"<td>{html.escape(str(r['資料時間']))}</td></tr>"
         for r in rows)
     tips = []
-    if any(r["類型"] == "缺車" for r in rows):
+    if any("缺車" in r["類型"] for r in rows):
         tips.append(f"<p>缺車：預測 <b>{h} 分鐘後</b>可借車數 ≤ {shortage()} 台，建議提早出門或改去附近的站。</p>")
-    if any(r["類型"] == "滿柱" for r in rows):
+    if any("滿柱" in r["類型"] for r in rows):
         tips.append(f"<p>滿柱：預測 <b>{h} 分鐘後</b>空位 ≤ {shortage()} 個，建議改還附近的站。</p>")
+    if any("持續" in r["類型"] for r in rows):
+        tips.append(f"<p>「持續」代表這站現在就已經沒車或沒位；之後約 {train.REMIND_GAP_MIN // 60} 小時才會再提醒一次。</p>")
     body = (
         "".join(tips)
         + "<table border='1' cellpadding='6' style='border-collapse:collapse'>"
@@ -80,8 +82,8 @@ def main():
     if a.test:
         t = datetime.now().strftime("%Y-%m-%d %H:%M")
         pc = f"{horizon()}分鐘後預測可借"
-        rows = [{"站名": "（測試）中央大學依仁堂", "類型": "缺車", "現在可借": 5, pc: 1, "預測空位": 29, "資料時間": t},
-                {"站名": "（測試）中央大學圖書館", "類型": "滿柱", "現在可借": 26, pc: 29, "預測空位": 1, "資料時間": t}]
+        rows = [{"站名": "（測試）中央大學依仁堂", "類型": "即將缺車", "現在可借": 5, pc: 1, "預測空位": 29, "資料時間": t},
+                {"站名": "（測試）中央大學圖書館", "類型": "即將滿柱", "現在可借": 26, pc: 29, "預測空位": 1, "資料時間": t}]
     else:
         if not (os.path.exists(train.MODEL) and os.path.exists(train.META)):
             print("還沒有正式模型 model.txt（資料滿 7 天後 GitHub 會自動訓練）。略過預測。")
@@ -110,10 +112,11 @@ def main():
         print(out.to_string(index=False))
         rows = []
         for r in out.to_dict("records"):
+            note = str(r.get("通知說明", ""))
             if r["要通知"] == "是":
-                rows.append({**r, "類型": "缺車"})
+                rows.append({**r, "類型": "持續缺車" if "持續缺車" in note else "即將缺車"})
             if r["要通知滿柱"] == "是":
-                rows.append({**r, "類型": "滿柱"})
+                rows.append({**r, "類型": "持續滿柱" if "持續滿柱" in note else "即將滿柱"})
         if not rows:
             print("沒有需要通知的站。")
             return
