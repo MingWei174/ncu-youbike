@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-25 19:17",
- "data_time": "2026-11-25 19:10",
+ "generated": "2026-11-25 19:27",
+ "data_time": "2026-11-25 19:20",
  "horizon": 30,
  "shortage": 2,
  "model_trained": "2026-11-23 08:43",
@@ -9,12 +9,12 @@
    "name": "中央大學圖書館",
    "campus": true,
    "km": 0.0,
-   "now": 32,
-   "pred": 32,
-   "empty": 30,
+   "now": 33,
+   "pred": 33,
+   "empty": 29,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.96813,
    "lng": 121.19467
   },
@@ -22,12 +22,12 @@
    "name": "中央大學依仁堂",
    "campus": true,
    "km": 0.0,
-   "now": 11,
-   "pred": 11,
-   "empty": 50,
+   "now": 10,
+   "pred": 10,
+   "empty": 51,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.96712,
    "lng": 121.19096
   },
@@ -40,7 +40,7 @@
    "empty": 22,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.96976,
    "lng": 121.19037
   },
@@ -53,7 +53,7 @@
    "empty": 8,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.95901,
    "lng": 121.1922
   },
@@ -66,7 +66,7 @@
    "empty": 8,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.95796,
    "lng": 121.19022
   },
@@ -79,7 +79,7 @@
    "empty": 11,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.96728,
    "lng": 121.17791
   },
@@ -92,7 +92,7 @@
    "empty": 17,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.958867,
    "lng": 121.204579
   },
@@ -105,7 +105,7 @@
    "empty": 15,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 19:10",
+   "time": "2026-11-25 19:20",
    "lat": 24.95701,
    "lng": 121.20262
   }
