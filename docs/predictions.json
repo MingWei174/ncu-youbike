@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-25 22:00",
- "data_time": "2026-11-25 22:00",
+ "generated": "2026-11-25 22:11",
+ "data_time": "2026-11-25 22:10",
  "horizon": 30,
  "shortage": 2,
  "model_trained": "2026-11-23 08:43",
@@ -14,7 +14,7 @@
    "empty": 33,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.96813,
    "lng": 121.19467
   },
@@ -22,12 +22,12 @@
    "name": "中央大學依仁堂",
    "campus": true,
    "km": 0.0,
-   "now": 7,
-   "pred": 7,
-   "empty": 54,
+   "now": 8,
+   "pred": 8,
+   "empty": 53,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.96712,
    "lng": 121.19096
   },
@@ -40,7 +40,7 @@
    "empty": 22,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.96976,
    "lng": 121.19037
   },
@@ -53,7 +53,7 @@
    "empty": 8,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.95901,
    "lng": 121.1922
   },
@@ -66,7 +66,7 @@
    "empty": 9,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.95796,
    "lng": 121.19022
   },
@@ -79,7 +79,7 @@
    "empty": 13,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.96728,
    "lng": 121.17791
   },
@@ -92,7 +92,7 @@
    "empty": 4,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.958867,
    "lng": 121.204579
   },
@@ -100,12 +100,12 @@
    "name": "民族文化街口",
    "campus": false,
    "km": 1.47,
-   "now": 18,
-   "pred": 18,
-   "empty": 12,
+   "now": 17,
+   "pred": 17,
+   "empty": 13,
    "shortage": false,
    "full": false,
-   "time": "2026-11-25 22:00",
+   "time": "2026-11-25 22:10",
    "lat": 24.95701,
    "lng": 121.20262
   }
