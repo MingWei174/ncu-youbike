@@ -1,6 +1,6 @@
 ﻿實驗,說明,預測(分鐘),缺車門檻,雨量特徵,MAE_模型,MAE_基準,recall_模型,recall_基準,precision_模型,precision_基準,贏過基準,最重要特徵
-v1,正式設定（含雨量）,30,2,有,1.2,1.231,0.713,0.711,0.718,0.716,是,station、minute_of_day、fill_ratio
-v2,預測 60 分鐘後,60,2,有,1.837,1.918,0.487,0.575,0.669,0.58,否,station、minute_of_day、fill_ratio
-v3,缺車門檻 5 台,30,5,有,1.2,1.231,0.869,0.866,0.877,0.878,是,station、minute_of_day、fill_ratio
-v4,60 分鐘後 + 門檻 5 台,60,5,有,1.837,1.918,0.791,0.79,0.818,0.809,是,station、minute_of_day、fill_ratio
-v5,不用雨量特徵,30,2,無,1.2,1.231,0.713,0.711,0.718,0.716,是,station、minute_of_day、fill_ratio
+v1,正式設定（含雨量）,30,2,有,1.759,1.822,0.665,0.662,0.67,0.667,是,station、minute_of_day、fill_ratio
+v2,預測 60 分鐘後,60,2,有,2.502,2.766,0.418,0.513,0.599,0.524,否,station、fill_ratio、minute_of_day
+v3,缺車門檻 5 台,30,5,有,1.759,1.822,0.844,0.841,0.844,0.842,是,station、minute_of_day、fill_ratio
+v4,60 分鐘後 + 門檻 5 台,60,5,有,2.502,2.766,0.76,0.757,0.779,0.761,是,station、fill_ratio、minute_of_day
+v5,不用雨量特徵,30,2,無,1.759,1.822,0.664,0.662,0.668,0.667,是,station、minute_of_day、fill_ratio
