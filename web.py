@@ -1,5 +1,5 @@
 """
-手機查詢網頁的資料：把最新預測寫成 docs/predictions.json
+手機查詢網頁的資料：把最新預測寫成 docs/predictions.json；另外寫 copilot_data.xlsx（給 Copilot Chat 小幫手上傳）
 
 網頁本身是 docs/index.html（固定不變），打開時會讀這個 JSON。
 GitHub Actions 每 10 分鐘跑 notify.py 時會順便呼叫 write_web()，再把 docs/ 一起推上 GitHub。
@@ -19,6 +19,7 @@ import train
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "docs", "predictions.json")
+COPILOT = os.path.join(HERE, "copilot_data.xlsx")   # 給 Copilot Chat 上傳用
 CAMPUS = "中央大學"      # 站名有這個關鍵字的算「校內站」
 NEAR_KM = 1.5           # 校外站只列出離校內站這麼近的
 
@@ -56,6 +57,10 @@ def write_web(out):
     d["campus"] = d["站名"].astype(str).str.contains(CAMPUS)
     d = d[d["campus"] | (d["km"] <= NEAR_KM)].sort_values(["campus", "km"], ascending=[False, True])
 
+    # 給 Copilot Chat 小幫手的精簡預測檔：只有中大三站和周邊站（原本 200 多站容易讀錯、編數字）
+    cols = ["站點代號", "站名", "資料時間", "現在可借", pred_col, "缺車預警", "預測空位", "滿柱預警"]
+    d[[c for c in cols if c in d.columns]].to_excel(COPILOT, index=False)
+
     stations = [{
         "name": str(r["站名"]).replace("YouBike2.0_", ""),
         "campus": bool(r["campus"]),
@@ -79,7 +84,7 @@ def write_web(out):
             "model_trained": str(meta.get("trained_at", ""))[:16].replace("T", " "),
             "stations": stations,
         }, f, ensure_ascii=False, indent=1)
-    print(f"已輸出手機網頁資料 docs/predictions.json（{len(stations)} 站）")
+    print(f"已輸出手機網頁資料 docs/predictions.json、小幫手資料 copilot_data.xlsx（{len(stations)} 站）")
 
 
 if __name__ == "__main__":

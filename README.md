@@ -51,7 +51,7 @@ flowchart LR
 | 預測與通知 | `notify.py` | GitHub 自動，每 10 分鐘 |
 | 缺車通知 | Power Automate（收到 Teams webhook 要求時 → 傳送電子郵件） | 自動 |
 | 手機查詢網頁 | `web.py`（寫 `docs/predictions.json`）、`docs/index.html` | GitHub 自動，每 10 分鐘；用 GitHub Pages 發布 |
-| 對話小幫手 | Microsoft 365 Copilot Chat，上傳 `predictions.xlsx` 並貼上指示 | Demo 前手動上傳最新預測檔 |
+| 對話小幫手 | Microsoft 365 Copilot Chat，上傳 `copilot_data.xlsx`（GitHub 每 10 分鐘由 `web.py` 自動產生，只有中大三站和周邊 5 站）與 `周邊站清單.xlsx`，並貼上 `copilot_instructions.md` 的指示 | Demo 前同步後手動上傳最新的 `copilot_data.xlsx`；測試 C：第一次 8／10，改用精簡檔後重測 10／10 |
 | 上線預測紀錄 | `live_eval.py`（寫 `data/pred_log_日期.csv`） | GitHub 自動，每 10 分鐘記下中大站點實際發出的預測；`python live_eval.py` 手動對照 |
 | 本機實驗 | `experiments.py`（一次跑完 v1–v5）或 `train.py --horizon … --shortage …` | 手動；結果寫進 `experiments.md`，不會動到正式模型 |
 | 簡報素材 | `analyze.py`、`nearby.py` | 手動 |
