@@ -4,6 +4,7 @@
 用法：
   python nearby.py            # 預設 1 公里內
   python nearby.py --km 1.5   # 改成 1.5 公里內
+  python nearby.py --km 1.5 --xlsx
 """
 import argparse
 import glob
