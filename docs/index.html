@@ -92,14 +92,36 @@ function badge(s) {
   return '<span class="badge b-ok">正常</span>';
 }
 
+// 兩站距離（公尺）
+function meters(a, b) {
+  const p = Math.PI / 180, R = 6371000;
+  const h = Math.sin((b.lat - a.lat) * p / 2) ** 2 +
+            Math.cos(a.lat * p) * Math.cos(b.lat * p) * Math.sin((b.lng - a.lng) * p / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const ENOUGH = 5;   // 建議的站至少要預測有這麼多車（或空位），避免走過去也剛好沒了
+
+// 依「距離」優先找替代站：先找夠多車（空位）的最近站，找不到才退而求其次
+function nearestAlt(s, d, ok, amount) {
+  const others = d.stations.filter(x => x.name !== s.name && x.lat != null && ok(x))
+    .map(x => ({ ...x, m: meters(s, x) })).sort((a, b) => a.m - b.m);
+  return others.find(x => amount(x) >= ENOUGH) || others[0];
+}
+function where(x) {
+  const m = Math.round(x.m / 10) * 10, min = Math.max(1, Math.round(x.m / 80));
+  return `約 ${m} 公尺，走路約 ${min} 分鐘`;
+}
+
 function card(s, h, small, d) {
   let tip = "";
   if (!small && s.shortage) {
-    const alt = d.stations.filter(x => x.campus && x.name !== s.name && !x.shortage).sort((a, b) => b.pred - a.pred)[0];
-    tip = alt ? `建議提早出門，或改去「${esc(alt.name)}」（預測 ${alt.pred} 台）` : "校內各站都可能沒車，建議改搭公車或看下方附近的站";
+    const alt = nearestAlt(s, d, x => !x.shortage, x => x.pred);
+    tip = alt ? `建議提早出門，或改去最近有車的「${esc(alt.name)}」（${where(alt)}，預測 ${alt.pred} 台）`
+              : "附近各站都可能沒車，建議改搭公車";
   } else if (!small && s.full) {
-    const alt = d.stations.filter(x => x.campus && x.name !== s.name && !x.full).sort((a, b) => (b.empty ?? 0) - (a.empty ?? 0))[0];
-    tip = alt ? `建議改還「${esc(alt.name)}」（預測空位 ${alt.empty} 個）` : "建議改還附近的站";
+    const alt = nearestAlt(s, d, x => !x.full, x => x.empty ?? 0);
+    tip = alt ? `建議改還最近有空位的「${esc(alt.name)}」（${where(alt)}，預測空位 ${alt.empty} 個）`
+              : "附近各站都可能沒空位，建議稍後再還";
   }
   return `<div class="card ${small ? "small" : ""}">
     <div class="row"><div class="name">${esc(s.name)}</div>${badge(s)}</div>
