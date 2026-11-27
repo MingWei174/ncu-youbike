@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="ridewise_ncu_logo_white.png">
+    <img src="ridewise_ncu_logo.png" alt="RideWise NCU logo" width="520">
+  </picture>
+</p>
+
 # RideWise NCU｜中大 YouBike 缺車預警
 
 **出門前就知道，30 分鐘後借不借得到。**
