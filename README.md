@@ -1,4 +1,6 @@
-# 中大 YouBike 缺車／滿柱預警
+# RideWise NCU｜中大 YouBike 缺車預警
+
+**出門前就知道，30 分鐘後借不借得到。**
 
 > 用機器學習預測中央大學 YouBike 站點 **30 分鐘後** 的可借車數，預計缺車時主動通知學生，並建議提早出門、改去附近有車的站或改搭公車。
 
@@ -117,6 +119,8 @@ python live_eval.py --md   # 另外把結果附加到 live_eval.md，提交後�
 - 只通知中大校內站點（`collect.yml` 的 `WATCH_KEYWORDS` 設定）
 
 ## 與其他做法的比較
+
+**官方 YouBike App**：只顯示各站「當下」的可借車數與空位，沒有預測功能（截圖見 `evidence/`）。本作品的「基準」就是這個數字，也就是假設 30 分鐘後車數不變；我們比對過 App 截圖和收集到的資料，同一時間的數字一致（截圖同樣放在 `evidence/`）。
 
 **台大學生開發的「Ubike」App**：除了顯示各站車數，還能預測熱門站點的等車時間，做法是依據前一小時的租借情況推估（[INSIDE 報導](https://www.inside.com.tw/article/2833-ubike-app-case-study)）。
 

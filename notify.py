@@ -41,7 +41,7 @@ def shortage():
 
 
 def build_payload(rows, test=False):
-    title = ("【測試】" if test else "⚠️ ") + "YouBike 缺車／滿柱預警：" + "、".join(
+    title = ("【測試】" if test else "⚠️ ") + "RideWise NCU｜YouBike 缺車／滿柱預警：" + "、".join(
         f"{r['站名']}（{r['類型']}）" for r in rows)
     h = horizon()
     pred_col = f"{h}分鐘後預測可借"
