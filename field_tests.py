@@ -26,6 +26,10 @@ import sys
 
 import pandas as pd
 
+# 中文字算兩格寬，表格欄位才會對齊
+pd.set_option("display.unicode.east_asian_width", True)
+pd.set_option("display.unicode.ambiguous_as_wide", False)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CSV = os.path.join(HERE, "field_tests.csv")
 
@@ -103,6 +107,10 @@ def report(path):
     t["實際缺車"] = t["實際缺車"].map({1.0: "是", 0.0: "否"})
     t["判斷"] = ["正確" if p == a else ("漏報" if a == "是" else "誤報")
                  for p, a in zip(t["預測缺車"], t["實際缺車"])]
+    # 顯示用：站名去掉「中央大學」、日期只留月/日、目標時間只留時:分，表格比較短
+    t["站點"] = t["站點"].astype(str).str.replace("中央大學", "", regex=False)
+    t["日期"] = pd.to_datetime(t["日期"].astype(str).str.strip()).dt.strftime("%m/%d")
+    t["目標時間"] = pd.to_datetime(t["目標時間"].astype(str).str.strip()).dt.strftime("%H:%M")
     cols = ["日期", "站點", "目標時間", "預測可借", "實際可借", "誤差(台)", "預測缺車", "實際缺車", "判斷"]
     print("\n【預測 vs 實際】")
     print(t[cols].to_string(index=False))
@@ -121,7 +129,7 @@ def report(path):
     rows = []
     for sta, dd in d.groupby("站點", observed=True):
         r = stats(dd)
-        r["站點"] = sta
+        r["站點"] = str(sta).replace("中央大學", "")
         r["天數"] = dd["日期"].astype(str).str.strip().nunique()
         rows.append(r)
     by_sta = pd.DataFrame(rows)[["站點", "天數", "筆數", "平均誤差(台)", "缺車判斷正確",
