@@ -1,4 +1,4 @@
-# Copilot Chat 小幫手：使用方式與指示
+# Copilot Chat (RideWise NCU｜中大 YouBike 缺車預警助理)：使用方式與指示
 
 學校帳號沒有 Copilot Studio 授權，所以改用 **Microsoft 365 Copilot Chat**：每次開新對話時，上傳兩個檔案，再貼上下面的指示。這份檔案提交到 GitHub 留下紀錄；修改指示後要一起更新。
 
