@@ -245,8 +245,10 @@ python weather.py --once                     # 測試雨量收集（需先設定
 
 ## 製作工具
 
-- **作品使用**：Power Automate（預警信）、Microsoft 365 Copilot Chat（小幫手）、Excel（`copilot_data.xlsx`）、GitHub Actions 與 GitHub Pages。
-- **製作過程**：Demo 影片以 Microsoft Clipchamp 剪輯。
+- **作品使用**：Power Automate（預警信）、Microsoft 365 Copilot Chat（小幫手）、Excel（`copilot_data.xlsx`）、GitHub Actions（自動收資料、訓練、預測）與 GitHub Pages（手機查詢網頁）。
+- **程式**：Python（LightGBM、scikit-learn、pandas、matplotlib），以 VS Code 開發。
+- **問卷**：Microsoft Forms（需求問卷、試用回饋問卷）。
+- **製作過程**：Demo 影片主要以 Capcut 剪輯，Microsoft Clipchamp 輔助剪輯；程式撰寫、文件整理與 logo 設計有使用 AI 助理（Claude、Gemini、ChatGPT）協助，內容與數據皆由組員確認。
 
 ## 團隊
 
