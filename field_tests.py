@@ -130,7 +130,7 @@ def report(path):
     print(by_sta.to_string(index=False))
 
     days = d["日期"].astype(str).str.strip().nunique()
-    print(f"\n涵蓋 {days} 天、{d['站點'].nunique()} 站。規格 F 要求至少 3 個平日早上。")
+    print(f"\n涵蓋 {days} 天、{d['站點'].nunique()} 站。規格 F 要求至少 3 個平日（傍晚為主）。")
     print("簡報寫法範例：「實地驗證 %d 天共 %d 筆，平均誤差 %s 台，缺車判斷 %s」"
           % (days, s["筆數"], s["平均誤差(台)"], s["命中率"]))
     if len(todo):
