@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-27 17:44",
- "data_time": "2026-11-27 17:40",
+ "generated": "2026-11-27 17:54",
+ "data_time": "2026-11-27 17:50",
  "horizon": 30,
  "shortage": 2,
  "model_trained": "2026-11-23 08:43",
@@ -9,12 +9,12 @@
    "name": "中央大學圖書館",
    "campus": true,
    "km": 0.0,
-   "now": 2,
+   "now": 1,
    "pred": 2,
    "empty": 60,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.96813,
    "lng": 121.19467
   },
@@ -27,7 +27,7 @@
    "empty": 59,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.96712,
    "lng": 121.19096
   },
@@ -40,7 +40,7 @@
    "empty": 35,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.96976,
    "lng": 121.19037
   },
@@ -48,12 +48,12 @@
    "name": "國家環境研究院",
    "campus": false,
    "km": 0.91,
-   "now": 4,
-   "pred": 4,
-   "empty": 8,
+   "now": 3,
+   "pred": 3,
+   "empty": 9,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.95901,
    "lng": 121.1922
   },
@@ -66,7 +66,7 @@
    "empty": 12,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.95796,
    "lng": 121.19022
   },
@@ -79,7 +79,7 @@
    "empty": 9,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.96728,
    "lng": 121.17791
   },
@@ -92,7 +92,7 @@
    "empty": 19,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.958867,
    "lng": 121.204579
   },
@@ -105,7 +105,7 @@
    "empty": 20,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 17:40",
+   "time": "2026-11-27 17:50",
    "lat": 24.95701,
    "lng": 121.20262
   }
