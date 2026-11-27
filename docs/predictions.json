@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-27 16:12",
- "data_time": "2026-11-27 16:10",
+ "generated": "2026-11-27 16:22",
+ "data_time": "2026-11-27 16:20",
  "horizon": 30,
  "shortage": 2,
  "model_trained": "2026-11-23 08:43",
@@ -14,7 +14,7 @@
    "empty": 60,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.96813,
    "lng": 121.19467
   },
@@ -27,7 +27,7 @@
    "empty": 60,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.96712,
    "lng": 121.19096
   },
@@ -35,12 +35,12 @@
    "name": "中央大學國民運動中心",
    "campus": true,
    "km": 0.0,
-   "now": 1,
-   "pred": 1,
-   "empty": 34,
+   "now": 2,
+   "pred": 2,
+   "empty": 33,
    "shortage": true,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.96976,
    "lng": 121.19037
   },
@@ -48,12 +48,12 @@
    "name": "國家環境研究院",
    "campus": false,
    "km": 0.91,
-   "now": 7,
-   "pred": 7,
-   "empty": 5,
+   "now": 6,
+   "pred": 6,
+   "empty": 6,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.95901,
    "lng": 121.1922
   },
@@ -66,7 +66,7 @@
    "empty": 14,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.95796,
    "lng": 121.19022
   },
@@ -79,7 +79,7 @@
    "empty": 7,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.96728,
    "lng": 121.17791
   },
@@ -92,7 +92,7 @@
    "empty": 27,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.958867,
    "lng": 121.204579
   },
@@ -105,7 +105,7 @@
    "empty": 25,
    "shortage": false,
    "full": false,
-   "time": "2026-11-27 16:10",
+   "time": "2026-11-27 16:20",
    "lat": 24.95701,
    "lng": 121.20262
   }
