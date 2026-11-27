@@ -109,6 +109,7 @@ flowchart LR
 - 預測 60 分鐘（v2）缺車 recall 明顯低於基準，因此採用 30 分鐘。
 - 雨量特徵（v1 vs v5）目前差異極小，收資料期間只有 11/24 一天明顯降雨。
 - 模型一開始直接預測車數，缺車 recall 只有 0.19；改為預測「增減」並加回現在車數後，才與基準持平並小幅超越。
+- **時間序列交叉驗證與模型比較**：`python experiments_ml.py` 用 `TimeSeriesSplit` 切 5 折（每一折都用過去訓練、預測之後），比較基準、線性迴歸、隨機森林與 LightGBM，報告 5 折的平均 ± 標準差，結果附加在 `experiments.md`。
 
 ### 實際 vs 預測對照圖（呈現缺車時段與目前的限制）
 
@@ -191,6 +192,7 @@ python live_eval.py --md   # 另外把結果附加到 live_eval.md，提交後�
 pip install -r requirements.txt
 
 python experiments.py                        # 一次跑完 v1–v5，結果寫進 experiments.md
+python experiments_ml.py                     # 5 折時間序列交叉驗證 + 線性迴歸／隨機森林／LightGBM 比較
 python train.py                              # 用正式設定訓練（存成 model_local.txt，不上傳）
 python train.py --no-weather                 # 實驗：不用雨量特徵
 python train.py --horizon 60 --shortage 5    # 實驗：改預測時間與缺車門檻
