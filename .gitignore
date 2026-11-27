@@ -3,7 +3,7 @@
 venv/
 __pycache__/
 shortage_ratio.xlsx
-plot_*.png
+plot_依仁堂_2026-11-26.png
 usage_*.png
 alert_log_local.json
 model_local.txt
